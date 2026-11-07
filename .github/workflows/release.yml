@@ -35,13 +35,13 @@ jobs:
       - name: Build frontend
         working-directory: ui
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --config.strictDepBuilds=false
           pnpm build
 
       - name: Build API bundle (with unix-dgram)
         working-directory: api
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --config.strictDepBuilds=false
           pnpm approve-builds --all
           pnpm rebuild
           pnpm build

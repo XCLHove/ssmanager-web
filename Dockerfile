@@ -5,7 +5,7 @@ FROM node:22-bookworm AS ui-build
 WORKDIR /app/ui
 RUN npm install -g pnpm@11
 COPY ui/package.json ui/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --config.strictDepBuilds=false
 COPY ui/ ./
 RUN pnpm build
 
@@ -17,7 +17,7 @@ RUN npm install -g pnpm@11 \
  && apt-get install -y --no-install-recommends python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
 COPY api/package.json api/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --config.strictDepBuilds=false
 # 允许并执行被 pnpm 拦截的构建脚本（含 unix-dgram 原生模块）
 RUN pnpm approve-builds --all && pnpm rebuild
 COPY api/ ./
