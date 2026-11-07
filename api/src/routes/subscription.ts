@@ -1,0 +1,82 @@
+import { Router } from 'express';
+import { config } from '../config.js';
+import { managerClient } from '../managerClient.js';
+import { getServerRecord } from '../serverStore.js';
+import { findSubscriptionByToken } from '../stores/passwordStore.js';
+import { TemplateError, renderForPassword } from '../services/templateService.js';
+
+const router = Router();
+
+function notFound(res) {
+  return res.status(404).type('text/plain').send('not found');
+}
+
+async function resolveServerPsk(record) {
+  if (record.password) return record.password;
+  const servers = await managerClient.listServers();
+  return servers.find((item) => item.port === record.port)?.password ?? null;
+}
+
+// GET /sub/:token（公开、非信封）
+router.get('/:token', async (req, res) => {
+  try {
+    const row = findSubscriptionByToken(req.params.token);
+    if (!row || row.user_enabled !== 1) {
+      return notFound(res);
+    }
+
+    const record = getServerRecord(row.server_port);
+    if (!record || !record.method) {
+      return notFound(res);
+    }
+
+    const serverPsk = await resolveServerPsk(record);
+    if (!serverPsk) {
+      return notFound(res);
+    }
+
+    const ctx = {
+      server: {
+        port: record.port,
+        host: config.publicHost,
+        method: record.method,
+        mode: record.mode,
+        noDelay: record.noDelay,
+        plugin: record.plugin,
+        pluginOpts: record.pluginOpts,
+        pluginMode: record.pluginMode,
+        password: serverPsk,
+      },
+      user: { id: row.user_id, username: row.username },
+      password: {
+        id: row.id,
+        slot: row.slot,
+        psk: row.password,
+        clientPassword: `${serverPsk}:${row.password}`,
+        name: row.ss_name,
+      },
+      token: req.params.token,
+      generatedAt: Date.now(),
+      format: 'clash',
+    };
+
+    const yaml = renderForPassword(record.port, ctx);
+
+    res.set({
+      'Content-Type': 'text/yaml; charset=utf-8',
+      'Content-Disposition': `attachment; filename="ssmanager-${record.port}.yaml"`,
+      'Cache-Control': 'no-store',
+      'profile-update-interval': '24',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    return res.status(200).send(yaml);
+  } catch (err) {
+    if (err instanceof TemplateError) {
+      return res.status(500).type('text/plain').send('模板渲染失败');
+    }
+    console.error('[sub] 订阅生成失败:', err.message);
+    return notFound(res);
+  }
+});
+
+export default router;

@@ -1,0 +1,46 @@
+{
+  "name": "ssmanager-web-api",
+  "version": "0.1.0",
+  "description": "ssmanager-web 后端：通过 UDP 管理 shadowsocks-rust ssmanager，并提供带登录会话与请求/响应加密的 REST API",
+  "main": "dist/server.mjs",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "pnpm typecheck && node scripts/build.mjs",
+    "start": "node --disable-warning=ExperimentalWarning dist/server.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "shadowsocks-rust",
+    "ssmanager",
+    "express"
+  ],
+  "license": "MIT",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.21.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "optionalDependencies": {
+    "unix-dgram": "^2.0.7"
+  }
+}
