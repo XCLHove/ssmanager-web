@@ -232,6 +232,9 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
 
 ### 配置文件 `config.json`
 
+仓库提供 `config.example.json` 作为示例，复制为 `config.json` 后按需修改
+（`config.json` 已加入 `.gitignore`，避免把凭据提交入库）。
+
 默认路径为 `<api 根>/config.json`（与 `package.json` 同目录）。可通过命令行指定其他文件：
 
 ```bash
@@ -369,7 +372,7 @@ pnpm dev -- --config=/path/to/config.json
 
 ```text
 /opt/ssmanager-web/
-├── config.json
+├── config.json          # 从 config.example.json 复制并修改
 ├── .env                 # 可选，从当前工作目录加载
 ├── data/                # 首次启动自动创建（SQLite）
 └── dist/
@@ -498,7 +501,7 @@ api/
 ├── dist/server.mjs        # 构建产物（单文件部署）
 ├── data/                  # 默认数据目录（运行时生成 SQLite，已 gitignore）
 ├── tsconfig.json
-├── config.json            # 配置文件（可改，含 ssmanager 地址）
+├── config.example.json    # 配置示例（复制为 config.json 后修改；config.json 已 gitignore）
 ├── .env.example           # 环境变量示例
 └── package.json
 ```

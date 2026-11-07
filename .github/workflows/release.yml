@@ -52,7 +52,7 @@ jobs:
           mkdir -p release/ssmanager-web/ui
           cp -R api/dist release/ssmanager-web/dist
           cp -R ui/dist release/ssmanager-web/ui/dist
-          cp api/config.json release/ssmanager-web/config.example.json
+          cp api/config.example.json release/ssmanager-web/config.example.json
           cp api/.env.example release/ssmanager-web/.env.example
           cp api/README.md release/ssmanager-web/README.md
           tar -C release -czf "ssmanager-web-${TAG}.tar.gz" ssmanager-web

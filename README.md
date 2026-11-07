@@ -23,7 +23,7 @@ cd ui && pnpm install && pnpm build      # 产出 ui/dist
 cd api && pnpm install && pnpm build     # 产出 api/dist（server.mjs + node_modules/unix-dgram）
 ```
 
-单文件部署：复制 `api/dist`、`ui/dist` 与 `config.json`，用 `node dist/server.mjs` 启动，无需安装依赖。
+单文件部署：复制 `api/dist`、`ui/dist`，并将 `api/config.example.json` 复制为 `config.json` 后修改，用 `node dist/server.mjs` 启动，无需安装依赖。
 详细配置见 [api/README.md](api/README.md)。
 
 ## 发布

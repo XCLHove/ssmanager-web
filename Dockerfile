@@ -31,7 +31,7 @@ WORKDIR /app
 
 COPY --from=api-build /app/api/dist ./dist
 COPY --from=ui-build /app/ui/dist ./ui/dist
-COPY api/config.json ./config.example.json
+COPY api/config.example.json ./config.example.json
 COPY api/.env.example ./.env.example
 COPY api/README.md ./README.md
 
