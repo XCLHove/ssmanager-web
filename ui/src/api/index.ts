@@ -194,7 +194,6 @@ export interface GeneratedUserPassword {
   id: number
   slot: number
   password: string
-  clientPassword: string
   url: string
   plainUrl: string
   agePrivateKey: string
@@ -237,6 +236,22 @@ export interface TemplatePreviewResult {
   yaml: string
 }
 
+export interface TemplateLibraryItem {
+  id: number
+  name: string
+  format: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TemplateLibraryDetail extends TemplateLibraryItem {
+  code: string
+}
+
+export interface TemplateLibraryListResult {
+  items: TemplateLibraryItem[]
+}
+
 export const adminApi = {
   servers: {
     reapply: (port: number) => post<SimpleOk>('/admin/servers/reapply', { port }),
@@ -249,6 +264,18 @@ export const adminApi = {
       post<SimpleOk>('/admin/templates/save', { port, format, code }),
     preview: (port: number, code: string) =>
       post<TemplatePreviewResult>('/admin/templates/preview', { port, code }),
+  },
+  templateLibrary: {
+    list: () =>
+      post<TemplateLibraryListResult>('/admin/templates/library/list', {}),
+    get: (id: number) =>
+      post<TemplateLibraryDetail>('/admin/templates/library/get', { id }),
+    create: (name: string, code: string, format = 'clash') =>
+      post<{ id: number }>('/admin/templates/library/create', { name, code, format }),
+    update: (id: number, name: string, code: string, format = 'clash') =>
+      post<SimpleOk>('/admin/templates/library/update', { id, name, code, format }),
+    remove: (id: number) =>
+      post<SimpleOk>('/admin/templates/library/remove', { id }),
   },
   codes: {
     generate: (count: number) => post<GenerateCodesResult>('/admin/codes/generate', { count }),

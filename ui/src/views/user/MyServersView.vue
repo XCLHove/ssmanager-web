@@ -17,7 +17,6 @@ const subscribeVisible = ref(false)
 const subscribeUrl = ref('')
 const subscribePlainUrl = ref('')
 const subscribePassword = ref('')
-const subscribeClientPassword = ref('')
 const subscribeAgePrivateKey = ref('')
 
 function formatTime(value?: number | null): string {
@@ -55,14 +54,12 @@ async function loadServers() {
 function openSubscribe(
   url: string,
   password?: string,
-  clientPassword?: string,
   agePrivateKey?: string | null,
   plainUrl?: string | null,
 ) {
   subscribeUrl.value = url
   subscribePlainUrl.value = plainUrl ?? ''
   subscribePassword.value = password ?? ''
-  subscribeClientPassword.value = clientPassword ?? ''
   subscribeAgePrivateKey.value = agePrivateKey ?? ''
   subscribeVisible.value = true
 }
@@ -73,13 +70,7 @@ async function handleGenerate(port: number) {
     const res = await userApi.passwords.generate(port)
     ElMessage.success('密码已生成')
     await loadServers()
-    openSubscribe(
-      res.url,
-      res.password,
-      res.clientPassword,
-      res.agePrivateKey,
-      res.plainUrl,
-    )
+    openSubscribe(res.url, res.password, res.agePrivateKey, res.plainUrl)
   } catch {
     // 错误提示已由 axios 拦截器统一处理
   } finally {
@@ -196,7 +187,6 @@ onMounted(() => {
                     openSubscribe(
                       entry.password.url,
                       undefined,
-                      undefined,
                       entry.password.agePrivateKey,
                       entry.password.plainUrl,
                     )
@@ -239,7 +229,6 @@ onMounted(() => {
       :url="subscribeUrl"
       :plain-url="subscribePlainUrl"
       :password="subscribePassword"
-      :client-password="subscribeClientPassword"
       :age-private-key="subscribeAgePrivateKey"
     />
   </div>

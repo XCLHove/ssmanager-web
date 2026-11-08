@@ -253,7 +253,7 @@ onUnmounted(() => {
             >
               编辑
             </el-button>
-            <el-button size="small" @click.stop="openTemplate(row as ServerInfo)">模板</el-button>
+            <el-button size="small" @click.stop="openTemplate(row as ServerInfo)">配置模板</el-button>
             <el-button
               type="danger"
               size="small"

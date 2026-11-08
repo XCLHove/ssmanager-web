@@ -11,7 +11,6 @@ const props = defineProps<{
   url?: string
   plainUrl?: string | null
   password?: string
-  clientPassword?: string
   agePrivateKey?: string | null
 }>()
 
@@ -186,18 +185,11 @@ onBeforeUnmount(clearImportTimer)
         </div>
       </div>
 
-      <template v-if="password || clientPassword">
-        <div v-if="clientPassword" class="secret-row">
-          <span class="field-label">客户端密码</span>
-          <code class="secret-text">{{ clientPassword }}</code>
-          <el-button link type="primary" @click="copyText(clientPassword)">复制</el-button>
-        </div>
-        <div v-if="password" class="secret-row">
-          <span class="field-label">密码</span>
-          <code class="secret-text">{{ password }}</code>
-          <el-button link type="primary" @click="copyText(password)">复制</el-button>
-        </div>
-      </template>
+      <div v-if="password" class="secret-row">
+        <span class="field-label">密码</span>
+        <code class="secret-text">{{ password }}</code>
+        <el-button link type="primary" @click="copyText(password)">复制</el-button>
+      </div>
     </div>
 
     <template #footer>
