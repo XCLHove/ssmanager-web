@@ -15,8 +15,10 @@ const servers = ref<UserServerItem[]>([])
 
 const subscribeVisible = ref(false)
 const subscribeUrl = ref('')
+const subscribePlainUrl = ref('')
 const subscribePassword = ref('')
 const subscribeClientPassword = ref('')
+const subscribeAgePrivateKey = ref('')
 
 function formatTime(value?: number | null): string {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
@@ -50,10 +52,18 @@ async function loadServers() {
   }
 }
 
-function openSubscribe(url: string, password?: string, clientPassword?: string) {
+function openSubscribe(
+  url: string,
+  password?: string,
+  clientPassword?: string,
+  agePrivateKey?: string | null,
+  plainUrl?: string | null,
+) {
   subscribeUrl.value = url
+  subscribePlainUrl.value = plainUrl ?? ''
   subscribePassword.value = password ?? ''
   subscribeClientPassword.value = clientPassword ?? ''
+  subscribeAgePrivateKey.value = agePrivateKey ?? ''
   subscribeVisible.value = true
 }
 
@@ -63,7 +73,13 @@ async function handleGenerate(port: number) {
     const res = await userApi.passwords.generate(port)
     ElMessage.success('密码已生成')
     await loadServers()
-    openSubscribe(res.url, res.password, res.clientPassword)
+    openSubscribe(
+      res.url,
+      res.password,
+      res.clientPassword,
+      res.agePrivateKey,
+      res.plainUrl,
+    )
   } catch {
     // 错误提示已由 axios 拦截器统一处理
   } finally {
@@ -158,6 +174,13 @@ onMounted(() => {
               </el-tag>
 
               <template v-if="entry.password">
+                <el-tag
+                  size="small"
+                  :type="entry.password.agePrivateKey ? 'success' : 'info'"
+                  effect="plain"
+                >
+                  {{ entry.password.agePrivateKey ? 'age 加密' : '未加密' }}
+                </el-tag>
                 <el-input
                   :model-value="entry.password.url"
                   readonly
@@ -169,7 +192,15 @@ onMounted(() => {
                   size="small"
                   type="primary"
                   plain
-                  @click="openSubscribe(entry.password.url)"
+                  @click="
+                    openSubscribe(
+                      entry.password.url,
+                      undefined,
+                      undefined,
+                      entry.password.agePrivateKey,
+                      entry.password.plainUrl,
+                    )
+                  "
                 >
                   订阅
                 </el-button>
@@ -206,8 +237,10 @@ onMounted(() => {
     <SubscribeDialog
       v-model="subscribeVisible"
       :url="subscribeUrl"
+      :plain-url="subscribePlainUrl"
       :password="subscribePassword"
       :client-password="subscribeClientPassword"
+      :age-private-key="subscribeAgePrivateKey"
     />
   </div>
 </template>

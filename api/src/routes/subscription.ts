@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import * as age from 'age-encryption';
 import { config } from '../config.js';
 import { managerClient } from '../managerClient.js';
 import { getServerRecord } from '../serverStore.js';
@@ -61,6 +62,28 @@ router.get('/:token', async (req, res) => {
     };
 
     const yaml = renderForPassword(record.port, ctx);
+
+    const plain = req.query.plain === '1' || req.query.plain === 'true';
+    if (!plain && row.age_public_key) {
+      try {
+        const encrypter = new age.Encrypter();
+        encrypter.addRecipient(row.age_public_key);
+        const ciphertext = await encrypter.encrypt(yaml);
+        const armored = age.armor.encode(ciphertext);
+
+        res.set({
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': `attachment; filename="ssmanager-${record.port}.yaml.age"`,
+          'Cache-Control': 'no-store',
+          'profile-update-interval': '24',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        return res.status(200).send(armored);
+      } catch (err: any) {
+        console.error('[sub] age 加密失败:', err?.message || err);
+        return res.status(500).type('text/plain').send('订阅加密失败');
+      }
+    }
 
     res.set({
       'Content-Type': 'text/yaml; charset=utf-8',

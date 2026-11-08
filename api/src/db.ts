@@ -98,11 +98,17 @@ try {
       ss_name TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
       subscription_token TEXT NOT NULL UNIQUE,
+      age_private_key TEXT,
+      age_public_key TEXT,
       created_at INTEGER NOT NULL,
       UNIQUE(user_id, server_port, slot),
       FOREIGN KEY(user_id, server_port) REFERENCES user_server_grants(user_id, port) ON DELETE CASCADE
     )
   `);
+
+  // 旧库迁移：age 密钥列（不迁移旧数据）
+  ensureColumn(database, 'user_server_passwords', 'age_private_key', 'age_private_key TEXT');
+  ensureColumn(database, 'user_server_passwords', 'age_public_key', 'age_public_key TEXT');
 } catch (err) {
   console.error(`[db] 初始化 SQLite 失败 (${DB_FILE}): ${err.message}`);
   throw err;

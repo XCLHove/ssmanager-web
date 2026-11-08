@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
+import * as age from 'age-encryption';
 import { config } from '../config.js';
 import { ManagerError } from '../managerClient.js';
 import { requireAuth, decryptRequest } from '../middleware/auth.js';
@@ -76,6 +77,9 @@ router.post('/servers/list', requireAuth, requireUserSession, decryptRequest, (r
         id: row.id,
         slot: row.slot,
         url: `${base}/sub/${row.subscription_token}`,
+        plainUrl: `${base}/sub/${row.subscription_token}?plain=1`,
+        agePrivateKey: row.age_private_key ?? null,
+        agePublicKey: row.age_public_key ?? null,
         createdAt: row.created_at,
       })),
     };
@@ -112,6 +116,9 @@ router.post('/passwords/generate', requireAuth, requireUserSession, decryptReque
     const subscriptionToken = crypto.randomBytes(32).toString('base64url');
     const ssName = `ssm_u${userId}_p${slot}`;
 
+    const agePrivateKey = await age.generateIdentity();
+    const agePublicKey = await age.identityToRecipient(agePrivateKey);
+
     let id;
     try {
       id = insertPassword({
@@ -121,6 +128,8 @@ router.post('/passwords/generate', requireAuth, requireUserSession, decryptReque
         ssName,
         password: psk,
         subscriptionToken,
+        agePrivateKey,
+        agePublicKey,
       });
     } catch (err) {
       if (String(err.message).includes('UNIQUE')) {
@@ -137,12 +146,16 @@ router.post('/passwords/generate', requireAuth, requireUserSession, decryptReque
     }
 
     const base = subscriptionBase(req);
+    const url = `${base}/sub/${subscriptionToken}`;
     return okEncrypted(res, req.session, {
       id,
       slot,
       password: psk,
       clientPassword: `${mainPassword}:${psk}`,
-      url: `${base}/sub/${subscriptionToken}`,
+      url,
+      plainUrl: `${url}?plain=1`,
+      agePrivateKey,
+      agePublicKey,
     });
   } catch (err) {
     return sendServiceError(res, err);

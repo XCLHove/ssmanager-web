@@ -24,14 +24,34 @@ export function getPasswordById(id) {
   return db.prepare('SELECT * FROM user_server_passwords WHERE id = ?').get(Number(id)) ?? null;
 }
 
-export function insertPassword({ userId, serverPort, slot, ssName, password, subscriptionToken }) {
+export function insertPassword({
+  userId,
+  serverPort,
+  slot,
+  ssName,
+  password,
+  subscriptionToken,
+  agePrivateKey = null,
+  agePublicKey = null,
+}: any) {
   const info = db
     .prepare(`
       INSERT INTO user_server_passwords
-        (user_id, server_port, slot, ss_name, password, subscription_token, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (user_id, server_port, slot, ss_name, password, subscription_token,
+         age_private_key, age_public_key, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
-    .run(Number(userId), Number(serverPort), Number(slot), ssName, password, subscriptionToken, Date.now());
+    .run(
+      Number(userId),
+      Number(serverPort),
+      Number(slot),
+      ssName,
+      password,
+      subscriptionToken,
+      agePrivateKey,
+      agePublicKey,
+      Date.now()
+    );
   return Number(info.lastInsertRowid);
 }
 
@@ -46,12 +66,26 @@ export function deletePasswordsForUserPort(userId, port) {
   );
 }
 
+/** 某用户密码涉及的端口（去重升序） */
+export function getPasswordPortsForUser(userId: number): number[] {
+  return db
+    .prepare('SELECT DISTINCT server_port FROM user_server_passwords WHERE user_id = ? ORDER BY server_port')
+    .all(Number(userId))
+    .map((row: any) => row.server_port);
+}
+
+/** 删除某用户的全部密码（删除用户时使用） */
+export function deletePasswordsForUser(userId: number): void {
+  db.prepare('DELETE FROM user_server_passwords WHERE user_id = ?').run(Number(userId));
+}
+
 /** 回滚用：按原 id 恢复一行（用于重建失败时还原刚删除的记录） */
 export function restorePasswordRow(row) {
   db.prepare(`
     INSERT INTO user_server_passwords
-      (id, user_id, server_port, slot, ss_name, password, subscription_token, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (id, user_id, server_port, slot, ss_name, password, subscription_token,
+       age_private_key, age_public_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     row.id,
     row.user_id,
@@ -60,6 +94,8 @@ export function restorePasswordRow(row) {
     row.ss_name,
     row.password,
     row.subscription_token,
+    row.age_private_key ?? null,
+    row.age_public_key ?? null,
     row.created_at
   );
 }
