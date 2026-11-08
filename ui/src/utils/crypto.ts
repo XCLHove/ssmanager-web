@@ -126,7 +126,7 @@ export async function encryptPayloadWithPem(
   }
 }
 
-/** 使用 localStorage 中的会话密钥加密请求体 */
+/** 使用 sessionStorage 中的会话密钥加密请求体 */
 export function encryptRequest(payload: unknown): EncryptedRequestBody {
   try {
     const sessionKey = getSessionKey()
