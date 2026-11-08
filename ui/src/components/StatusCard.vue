@@ -104,4 +104,28 @@ const detailText = computed(() => {
   font-size: 12px;
   color: #909399;
 }
+
+@media (max-width: 768px) {
+  .status-card :deep(.el-card__body) {
+    padding: 12px 14px;
+  }
+
+  .status-row {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .status-left {
+    gap: 8px;
+  }
+
+  .status-detail {
+    word-break: break-all;
+  }
+
+  .status-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
 </style>

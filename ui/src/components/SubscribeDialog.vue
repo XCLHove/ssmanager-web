@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { toDataURL } from 'qrcode'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { copyText } from '@/utils/clipboard'
 import { globalLoadingStart } from '@/utils/loading'
 import { toAbsoluteUrl } from '@/utils/url'
@@ -15,6 +16,7 @@ const props = defineProps<{
   agePrivateKey?: string | null
 }>()
 
+const isMobile = useIsMobile()
 const qrDataUrl = ref('')
 let importTimer: number | undefined
 
@@ -119,7 +121,7 @@ onBeforeUnmount(clearImportTimer)
 </script>
 
 <template>
-  <el-dialog v-model="visible" title="订阅信息" width="480px" destroy-on-close>
+  <el-dialog v-model="visible" title="订阅信息" width="min(480px, 92vw)" destroy-on-close>
     <div class="subscribe-body">
       <el-alert
         v-if="isAgeEncrypted"
@@ -138,7 +140,14 @@ onBeforeUnmount(clearImportTimer)
 
       <div class="field-label">订阅 URL{{ isAgeEncrypted ? '（已加密）' : '' }}</div>
       <div class="url-row">
-        <el-input :model-value="absoluteUrl" readonly size="default" />
+        <el-input
+          :model-value="absoluteUrl"
+          :type="isMobile ? 'textarea' : 'text'"
+          :autosize="isMobile ? { minRows: 2, maxRows: 4 } : undefined"
+          readonly
+          size="default"
+          class="url-input"
+        />
         <el-button type="primary" plain @click="handleCopyUrl">复制</el-button>
       </div>
 
@@ -151,6 +160,7 @@ onBeforeUnmount(clearImportTimer)
             show-password
             readonly
             size="default"
+            class="url-input"
           />
           <el-button type="primary" plain @click="copyText(agePrivateKey)">复制</el-button>
         </div>
@@ -172,7 +182,14 @@ onBeforeUnmount(clearImportTimer)
           <el-tag type="warning" size="small" effect="light">明文 · 泄露风险自负</el-tag>
         </div>
         <div class="url-row">
-          <el-input :model-value="absolutePlainUrl" readonly size="default" />
+          <el-input
+            :model-value="absolutePlainUrl"
+            :type="isMobile ? 'textarea' : 'text'"
+            :autosize="isMobile ? { minRows: 2, maxRows: 4 } : undefined"
+            readonly
+            size="default"
+            class="url-input"
+          />
           <el-button plain @click="copyText(absolutePlainUrl)">复制</el-button>
         </div>
       </div>
@@ -210,17 +227,32 @@ onBeforeUnmount(clearImportTimer)
 .url-row {
   display: flex;
   gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.url-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.url-input :deep(.el-textarea__inner) {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 .qr-wrap {
   display: flex;
   justify-content: center;
   padding: 8px 0;
+  max-width: 100%;
 }
 
 .qr-image {
   width: 220px;
-  height: 220px;
+  max-width: 100%;
+  height: auto;
 }
 
 .hint {
@@ -261,5 +293,23 @@ onBeforeUnmount(clearImportTimer)
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .subscribe-body {
+    word-break: break-word;
+  }
+
+  .subscribe-footer {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .subscribe-footer :deep(.el-button) {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 </style>

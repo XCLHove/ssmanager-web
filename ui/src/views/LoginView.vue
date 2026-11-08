@@ -134,10 +134,12 @@ async function handleLogin() {
 
 <style scoped>
 .login-page {
-  height: 100%;
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px 16px;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 20% 30%, rgba(64, 158, 255, 0.12), transparent 40%),
     radial-gradient(circle at 80% 70%, rgba(103, 194, 58, 0.1), transparent 40%),
@@ -145,7 +147,7 @@ async function handleLogin() {
 }
 
 .login-card {
-  width: 400px;
+  width: min(400px, calc(100vw - 32px));
   border-radius: 10px;
 }
 

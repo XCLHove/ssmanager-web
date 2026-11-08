@@ -13,6 +13,7 @@ const props = defineProps<{ samples: TrafficHistorySample[] }>()
 
 const container = ref<HTMLDivElement>()
 let chart: ECharts | null = null
+let resizeObserver: ResizeObserver | null = null
 
 function formatRate(value: number): string {
   const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
@@ -80,6 +81,12 @@ onMounted(() => {
   chart = echarts.init(container.value)
   chart.setOption(buildOption(props.samples))
   window.addEventListener('resize', handleResize)
+
+  // 布局切换（如移动端媒体查询改变图表高度）不会触发 window resize，监听容器尺寸
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => chart?.resize())
+    resizeObserver.observe(container.value)
+  }
 })
 
 watch(
@@ -91,6 +98,8 @@ watch(
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  resizeObserver?.disconnect()
+  resizeObserver = null
   chart?.dispose()
   chart = null
 })
@@ -104,5 +113,11 @@ onBeforeUnmount(() => {
 .traffic-chart {
   width: 100%;
   height: 320px;
+}
+
+@media (max-width: 768px) {
+  .traffic-chart {
+    height: 240px;
+  }
 }
 </style>

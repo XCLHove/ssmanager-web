@@ -3,8 +3,11 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { serversApi, type AddServerPayload, type ServerInfo } from '@/api'
 import { globalLoadingStart } from '@/utils/loading'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const visible = defineModel<boolean>({ default: false })
+
+const isMobile = useIsMobile()
 
 const props = defineProps<{ server?: ServerInfo | null }>()
 
@@ -225,7 +228,7 @@ async function handleSubmit() {
     v-model="visible"
     class="server-form-drawer"
     direction="rtl"
-    size="620px"
+    :size="isMobile ? '100%' : '620px'"
     :title="title"
     destroy-on-close
   >
@@ -237,7 +240,13 @@ async function handleSubmit() {
       show-icon
       title="该服务器不是由本面板创建，ssmanager 无法回显加密方式、插件和传输模式，请按需重新填写。"
     />
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-form
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      :label-position="isMobile ? 'top' : 'right'"
+      :label-width="isMobile ? 'auto' : '100px'"
+    >
       <el-divider content-position="left">基础配置</el-divider>
       <el-form-item label="端口" prop="port">
         <el-input-number
@@ -342,10 +351,6 @@ async function handleSubmit() {
   gap: 8px;
 }
 
-.server-form-drawer :deep(.el-drawer__body) {
-  padding-top: 8px;
-}
-
 .server-form-drawer :deep(.el-divider) {
   margin: 4px 0 16px;
 }
@@ -354,5 +359,11 @@ async function handleSubmit() {
   font-size: 13px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+</style>
+
+<style>
+.server-form-drawer .el-drawer__body {
+  padding-top: 8px;
 }
 </style>

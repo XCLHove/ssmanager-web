@@ -306,4 +306,61 @@ function handleResetDefault() {
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
+
+@media (max-width: 768px) {
+  .template-body {
+    flex-direction: column;
+    gap: 12px;
+    height: auto;
+    min-height: 0;
+  }
+
+  .editor-pane {
+    flex: none;
+    height: 50vh;
+    min-height: 240px;
+  }
+
+  .preview-pane {
+    flex: none;
+    height: 35vh;
+    min-height: 180px;
+  }
+
+  .editor-host {
+    min-height: 0;
+  }
+
+  .editor-host :deep(.monaco-container) {
+    min-height: 0;
+  }
+
+  .pane-title {
+    flex-wrap: wrap;
+  }
+
+  .library-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .library-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .template-footer {
+    flex-wrap: wrap;
+  }
+
+  .shortcut-hint {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .template-footer :deep(.el-button) {
+    flex: 1 1 auto;
+    margin-left: 0;
+  }
+}
 </style>
