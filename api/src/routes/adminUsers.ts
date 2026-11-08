@@ -4,13 +4,16 @@ import { requireAuth, requireAdmin, decryptRequest } from '../middleware/auth.js
 import { revokeUserSessions } from '../auth/sessionStore.js';
 import { hashPassword } from '../auth/password.js';
 import { getAllServerConfigs } from '../serverStore.js';
-import { addGrant, getGrantPorts, removeGrant } from '../stores/grantStore.js';
+import { addGrant, getGrantPorts, removeGrant, removeGrantsForUser } from '../stores/grantStore.js';
 import {
+  deletePasswordsForUser,
   deletePasswordsForUserPort,
+  getPasswordPortsForUser,
   listPasswordsForUserPort,
   restorePasswordRow,
 } from '../stores/passwordStore.js';
 import {
+  deleteUser,
   findUserById,
   listUsers,
   setUserEnabled,
@@ -172,6 +175,49 @@ router.post('/grants/set', requireAuth, requireAdmin, decryptRequest, async (req
   }
 
   affectedPorts.sort((a, b) => a - b);
+  return okEncrypted(res, req.session, { ok: true, affectedPorts });
+});
+
+// POST /api/admin/users/remove {userId}
+// 删除用户：先删授权/密码并重建相关端口（清除 ssmanager 中的 EIH users），全部成功后再删用户。
+router.post('/remove', requireAuth, requireAdmin, decryptRequest, async (req, res) => {
+  const userId = Number(req.body?.userId);
+  if (!Number.isInteger(userId)) {
+    return fail(res, 400, '用户 ID 无效');
+  }
+
+  const user = findUserById(userId);
+  if (!user) {
+    return fail(res, 400, '用户不存在');
+  }
+
+  const affectedPorts = [
+    ...new Set([...getGrantPorts(userId), ...getPasswordPortsForUser(userId)]),
+  ].sort((a, b) => a - b);
+
+  // 先删本地授权/密码，使重建时该用户不再出现在 users 中
+  deletePasswordsForUser(userId);
+  removeGrantsForUser(userId);
+
+  let failedPort: number | null = null;
+  for (const port of affectedPorts) {
+    try {
+      await applyFromDb(port);
+    } catch (err: any) {
+      console.error(
+        `[admin/users] 删除用户 ${userId} 时重建端口 ${port} 失败:`,
+        err?.message || err
+      );
+      if (failedPort === null) failedPort = port;
+    }
+  }
+
+  if (failedPort !== null) {
+    return fail(res, 502, `删除失败，端口 ${failedPort} 重建失败，请重试`);
+  }
+
+  deleteUser(userId);
+  revokeUserSessions(user.username);
   return okEncrypted(res, req.session, { ok: true, affectedPorts });
 });
 

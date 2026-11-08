@@ -43,6 +43,17 @@ export function setUserPasswordHash(id, passwordHash) {
   return info.changes > 0;
 }
 
+/** 修改用户登录密码（复用 setUserPasswordHash） */
+export function updatePassword(id: number, passwordHash: string): boolean {
+  return setUserPasswordHash(id, passwordHash);
+}
+
+/** 删除用户（授权/密码应已提前删除；注册码 used_by_user_id 由 FK SET NULL） */
+export function deleteUser(id: number): boolean {
+  const info = db.prepare('DELETE FROM users WHERE id = ?').run(Number(id));
+  return info.changes > 0;
+}
+
 export function toPublicUser(row) {
   return {
     id: row.id,

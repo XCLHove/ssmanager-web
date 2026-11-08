@@ -196,7 +196,12 @@ onMounted(() => {
           <template #default="{ row }">{{ formatTime(row.usedAt) }}</template>
         </el-table-column>
         <el-table-column label="使用者" min-width="140">
-          <template #default="{ row }">{{ row.usedByUsername || '-' }}</template>
+          <template #default="{ row }">
+            {{
+              row.usedByUsername ||
+              (isUsed(row as RegistrationCodeItem) ? '已删除用户' : '-')
+            }}
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="190">
           <template #default="{ row }">

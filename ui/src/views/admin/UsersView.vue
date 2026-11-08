@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, reactive, ref } from 'vue'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { md5 } from 'js-md5'
 import {
@@ -120,6 +120,33 @@ async function handleResetPassword() {
   }
 }
 
+async function handleRemoveUser(user: AdminUserItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除用户 ${user.username} 吗？将同时移除其服务器授权、所有密码和订阅 URL，操作不可恢复。`,
+      '删除用户',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return
+  }
+
+  const endLoading = globalLoadingStart('删除用户中...')
+  try {
+    await adminApi.users.remove(user.id)
+    ElMessage.success(`用户 ${user.username} 已删除`)
+    await loadUsers()
+  } catch {
+    // 错误提示已由 axios 拦截器统一处理
+  } finally {
+    endLoading()
+  }
+}
+
 async function openGrants(user: AdminUserItem) {
   grantTarget.value = user
   grantServers.value = []
@@ -207,13 +234,21 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="grantCount" label="授权数" width="100" />
         <el-table-column prop="passwordCount" label="密码数" width="100" />
-        <el-table-column label="操作" width="220">
+        <el-table-column label="操作" width="320">
           <template #default="{ row }">
             <el-button size="small" @click="openResetPassword(row as AdminUserItem)">
               重置密码
             </el-button>
             <el-button size="small" type="primary" plain @click="openGrants(row as AdminUserItem)">
               授权
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              @click="handleRemoveUser(row as AdminUserItem)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>

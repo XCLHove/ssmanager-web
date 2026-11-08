@@ -31,6 +31,11 @@ export function removeGrant(userId, port) {
   );
 }
 
+/** 删除某用户的全部授权（删除用户时使用） */
+export function removeGrantsForUser(userId: number): void {
+  db.prepare('DELETE FROM user_server_grants WHERE user_id = ?').run(Number(userId));
+}
+
 /** 服务器是否存在授权或已生成密码（用于禁止改端口） */
 export function serverHasGrantsOrPasswords(port) {
   const portNum = Number(port);
