@@ -72,7 +72,7 @@ router.get('/:token', async (req, res) => {
 
         res.set({
           'Content-Type': 'text/plain; charset=utf-8',
-          'Content-Disposition': `attachment; filename="ssmanager-${record.port}.yaml.age"`,
+          'Content-Disposition': `attachment; filename="${config.publicHost}"`,
           'Cache-Control': 'no-store',
           'profile-update-interval': '24',
           'X-Content-Type-Options': 'nosniff',
@@ -86,7 +86,7 @@ router.get('/:token', async (req, res) => {
 
     res.set({
       'Content-Type': 'text/yaml; charset=utf-8',
-      'Content-Disposition': `attachment; filename="ssmanager-${record.port}.yaml"`,
+      'Content-Disposition': `attachment; filename="${config.publicHost}"`,
       'Cache-Control': 'no-store',
       'profile-update-interval': '24',
       'X-Content-Type-Options': 'nosniff',
