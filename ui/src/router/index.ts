@@ -48,6 +48,12 @@ const router = createRouter({
           meta: { title: '服务器管理', roles: ['admin'] },
         },
         {
+          path: 'stats',
+          name: 'stats',
+          component: () => import('@/views/admin/TrafficView.vue'),
+          meta: { title: '流量统计', roles: ['admin'] },
+        },
+        {
           path: 'users',
           name: 'users',
           component: () => import('@/views/admin/UsersView.vue'),
@@ -64,6 +70,12 @@ const router = createRouter({
           name: 'my-servers',
           component: () => import('@/views/user/MyServersView.vue'),
           meta: { title: '我的服务器', roles: ['user'] },
+        },
+        {
+          path: 'account',
+          name: 'account',
+          component: () => import('@/views/user/AccountView.vue'),
+          meta: { title: '用户管理', roles: ['user'] },
         },
       ],
     },

@@ -11,7 +11,9 @@ import adminCodesRoutes from './routes/adminCodes.js';
 import adminUsersRoutes from './routes/adminUsers.js';
 import adminServersRoutes from './routes/adminServers.js';
 import adminTemplatesRoutes from './routes/adminTemplates.js';
+import adminStatsRoutes from './routes/adminStats.js';
 import userServersRoutes from './routes/userServers.js';
+import userAccountRoutes from './routes/userAccount.js';
 import subscriptionRoutes from './routes/subscription.js';
 import serverRoutes from './routes/servers.js';
 import statusRoutes from './routes/status.js';
@@ -32,7 +34,9 @@ export function createApp() {
   app.use('/api/admin/users', adminUsersRoutes);
   app.use('/api/admin/servers', adminServersRoutes);
   app.use('/api/admin/templates', adminTemplatesRoutes);
+  app.use('/api/admin/stats', adminStatsRoutes);
   app.use('/api/user', userServersRoutes);
+  app.use('/api/user', userAccountRoutes);
   app.use('/api/servers', serverRoutes);
   app.use('/api', statusRoutes);
 
