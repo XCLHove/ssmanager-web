@@ -11,7 +11,6 @@ import {
   getServerConfig,
   saveServerConfig,
   removeServerConfig,
-  pruneServerConfigs,
 } from '../serverStore.js';
 
 const router = Router();
@@ -116,7 +115,6 @@ router.post('/list', requireAuth, requireAdmin, decryptRequest, async (req, res)
         ? { ...server, ...record, port: server.port, configKnown: true }
         : { ...server, configKnown: false };
     });
-    pruneServerConfigs(merged.map((server) => server.port));
     return okEncrypted(res, req.session, {
       ports: merged.map((server) => server.port),
       servers: merged,

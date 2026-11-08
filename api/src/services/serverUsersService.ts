@@ -31,6 +31,13 @@ const portLocks = new Map<number, Promise<any>>();
 /** 全局串行队列 */
 let globalQueue: Promise<any> = Promise.resolve();
 
+/** 将任意任务接入全局服务器串行队列（与 users 重建共用，供对账移除端口使用） */
+export function withServerQueue<T>(task: () => Promise<T>): Promise<T> {
+  const run = globalQueue.then(task, task);
+  globalQueue = run.catch(() => {});
+  return run;
+}
+
 function withPortLock(port: number, task: () => Promise<any>): Promise<any> {
   const key = Number(port);
   const previous = portLocks.get(key) ?? Promise.resolve();
@@ -117,15 +124,16 @@ async function applyInternal(
   }
 }
 
-/** 使用本地记录中的配置与 DB users 重建（用户密码增删/撤销授权/reapply 使用） */
+/**
+ * 使用本地记录中的配置与 DB users 重建。
+ * 用户密码增删/撤销授权/reapply/启动对账使用；非 2022 服务器若没有 DB 用户也可重建
+ * （applyInternal 会在存在用户密码且方法非 2022 时报错）。
+ */
 export async function applyFromDb(port: number): Promise<boolean> {
   return withPortLock(port, async () => {
     const record = getServerRecord(port);
     if (!record) {
       throw new ServerUsersError(400, '服务器不存在或缺少本地配置');
-    }
-    if (!record.method || !record.method.startsWith('2022-blake3-')) {
-      throw new ServerUsersError(400, '仅 2022-blake3-* 服务器支持托管用户');
     }
     const mainPassword = await resolveMainPassword(port, record);
     await applyInternal(port, record, mainPassword);

@@ -135,7 +135,11 @@ export function removeServerConfig(port: number): void {
   }
 }
 
-/** 清理已不在 ssmanager 运行列表中的端口记录；列表为空时清空表 */
+/**
+ * 手动清理本地端口记录（保留导出，但不再自动调用）。
+ * 本地 SQLite 是事实来源：不得因 ssmanager list 暂时缺失而删除记录，
+ * 否则会级联删除授权/密码。删除服务器请走 /api/servers/remove。
+ */
 export function pruneServerConfigs(ports: number[]): void {
   try {
     const alive = ports.map(Number).filter((port) => Number.isInteger(port));
