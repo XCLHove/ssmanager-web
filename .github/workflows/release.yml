@@ -17,6 +17,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -40,6 +43,8 @@ jobs:
 
       - name: Build API bundle (with unix-dgram)
         working-directory: api
+        env:
+          APP_VERSION: ${{ github.ref_name }}
         run: |
           pnpm install --frozen-lockfile --config.strictDepBuilds=false
           pnpm approve-builds --all
@@ -58,12 +63,35 @@ jobs:
           tar -C release -czf "ssmanager-web-${TAG}.tar.gz" ssmanager-web ui
           ls -lh "ssmanager-web-${TAG}.tar.gz"
 
+      - name: Generate release notes from commits between tags
+        run: |
+          set -euo pipefail
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG="$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || true)"
+          {
+            echo "## 变更内容"
+            echo
+            if [ -n "$PREV_TAG" ]; then
+              echo "自 \`${PREV_TAG}\` 以来的提交："
+              echo
+              git log "${PREV_TAG}..${CURRENT_TAG}" --no-merges --pretty=format:'- %s (`%h`)'
+              echo
+              echo
+              echo "**完整对比**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${CURRENT_TAG}"
+            else
+              echo "首个版本的提交："
+              echo
+              git log "${CURRENT_TAG}" --no-merges --pretty=format:'- %s (`%h`)'
+            fi
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
           files: ssmanager-web-*.tar.gz
-          generate_release_notes: true
+          body_path: RELEASE_NOTES.md
 
   docker:
     name: Build and push Docker image
@@ -107,5 +135,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

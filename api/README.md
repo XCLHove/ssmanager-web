@@ -308,6 +308,8 @@ node dist/server.mjs --config=/path/to/config.json
 | `publicHost` | `127.0.0.1` | 客户端连接使用的公网主机/域名（端口沿用服务器端口） |
 | `publicBaseUrl` | 空 | 订阅绝对 URL 的基础地址（如 `https://ss.example.com`）；为空时使用请求的 Host |
 | `managerTimeoutMs` | `3000` | 与 ssmanager 通信超时（毫秒） |
+| `githubRepo` | `XCLHove/ssmanager-web` | 用于检查最新 Release 的 GitHub 仓库（`owner/repo`） |
+| `githubToken` | 空 | 可选 GitHub Token；私有仓库或需要提高 API 限额时配置 |
 
 完整示例（`config.example.json`）：
 
@@ -322,7 +324,9 @@ node dist/server.mjs --config=/path/to/config.json
   "dataDir": "data",
   "publicHost": "127.0.0.1",
   "publicBaseUrl": "",
-  "managerTimeoutMs": 3000
+  "managerTimeoutMs": 3000,
+  "githubRepo": "XCLHove/ssmanager-web",
+  "githubToken": ""
 }
 ```
 
@@ -365,6 +369,8 @@ pnpm install
 pnpm dev -- -c config.json        # tsx watch src/index.ts（文件变更自动重启）
 pnpm typecheck                    # tsc --noEmit
 pnpm build                        # 先 typecheck，再由 esbuild 打包 dist/server.mjs
+# 可通过 APP_VERSION 注入版本号（CI 使用 Release tag）：
+APP_VERSION=v0.0.5 pnpm build
 pnpm start -- -c config.json      # 运行打包产物
 ```
 
@@ -512,6 +518,7 @@ ssmanager 不持久化动态 `add` 的服务器，重启即清空。本后端以
 | `POST` | `/api/servers/remove` | 移除端口。body `{port}` → data `{ok: true}` |
 | `POST` | `/api/stats` | 流量统计（经 `ping` 查询）→ data `{supported: true, stats: {"8388": 12345}, unit: "bytes"}`；manager 不可达 `502` |
 | `POST` | `/api/status` | 探测 ssmanager（`ping`，约 3 秒超时）→ data `{ok: true, address: "127.0.0.1:6100"}` 或 `{ok: false, error: "..."}` |
+| `POST` | `/api/version` | 当前版本与 GitHub 最新 Release（15 分钟缓存）→ data `{current, latest:{tag,name,body,url,publishedAt}\|null, hasUpdate, error}` |
 
 补充说明：
 

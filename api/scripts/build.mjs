@@ -14,6 +14,8 @@ const ROOT = process.cwd();
 const DIST_DIR = path.join(ROOT, 'dist');
 const DIST_NODE_MODULES = path.join(DIST_DIR, 'node_modules');
 const requireFromRoot = createRequire(path.join(ROOT, 'package.json'));
+const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+const appVersion = String(process.env.APP_VERSION || pkg.version || 'dev');
 
 fs.rmSync(DIST_DIR, { recursive: true, force: true });
 
@@ -25,6 +27,9 @@ await build({
   format: 'esm',
   outfile: 'dist/server.mjs',
   external: ['unix-dgram'],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   logLevel: 'info',
   // 部分 CJS 依赖（如 debug）会动态 require 内置模块；ESM 产物需要注入 require
   banner: {

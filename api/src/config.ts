@@ -238,6 +238,12 @@ export const config = {
 
   /** 与 ssmanager 通信的超时（毫秒） */
   managerTimeoutMs: toTimeoutMs(valueOrDefault(fileConfig.managerTimeoutMs, 3000), 3000),
+
+  /** GitHub 仓库（owner/repo），用于检查最新 Release */
+  githubRepo: String(valueOrDefault(fileConfig.githubRepo, 'XCLHove/ssmanager-web')),
+
+  /** GitHub Token（可选；私有仓库或提高 API 限额时配置） */
+  githubToken: String(valueOrDefault(fileConfig.githubToken, '')),
 };
 
 /** ssmanager 地址的规范化表示：UDP 为 host:port（IPv6 加方括号），Unix 为 unix:<path> */

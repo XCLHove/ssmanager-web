@@ -3,8 +3,21 @@ import { managerClient, ManagerError } from '../managerClient.js';
 import { managerAddressString } from '../config.js';
 import { requireAuth, decryptRequest } from '../middleware/auth.js';
 import { okEncrypted, fail } from '../response.js';
+import { getVersionInfo } from '../services/updateService.js';
 
 const router = Router();
+
+// POST /api/version → data { current, latest, hasUpdate, error }
+// 从 GitHub 获取最新 Release（15 分钟缓存）并与当前构建版本比较
+router.post('/version', requireAuth, decryptRequest, async (req, res) => {
+  try {
+    const info = await getVersionInfo();
+    return okEncrypted(res, req.session, info);
+  } catch (err) {
+    console.error('[version] 未预期的错误:', err);
+    return fail(res, 500, '检查版本失败');
+  }
+});
 
 // POST /api/status → data { ok: true, address } / { ok: false, error }
 // 通过 `ping` 命令探测 ssmanager 存活（超时 3 秒，见 config.managerTimeoutMs）

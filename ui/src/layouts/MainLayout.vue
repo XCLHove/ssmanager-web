@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Monitor, SwitchButton, Ticket, TrendCharts, User, UserFilled } from '@element-plus/icons-vue'
+import { systemApi, type VersionInfo } from '@/api'
 import { clearAuth } from '@/utils/auth'
 import { resetPublicKeyCache } from '@/utils/crypto'
 import { globalLoadingStart } from '@/utils/loading'
@@ -15,6 +16,50 @@ const activeMenu = computed(() => route.path)
 const pageTitle = computed(() => (typeof route.meta.title === 'string' ? route.meta.title : ''))
 const roleText = computed(() => (session.role === 'admin' ? '管理员' : '用户'))
 
+const versionInfo = ref<VersionInfo | null>(null)
+const updateDialogVisible = ref(false)
+const UPDATE_SEEN_KEY = 'ssmanager_web_update_seen'
+
+const latestTagText = computed(() =>
+  versionInfo.value?.latest?.tag
+    ? versionInfo.value.latest.tag.replace(/^v/i, '')
+    : '',
+)
+
+const currentVersionText = computed(() => {
+  const current = versionInfo.value?.current
+  if (!current) return ''
+  return /^dev$/i.test(current) ? 'dev' : `v${current.replace(/^v/i, '')}`
+})
+
+function formatDate(value?: string | null): string {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false })
+}
+
+async function loadVersion() {
+  try {
+    const info = await systemApi.version({ silent: true })
+    versionInfo.value = info
+    if (info.hasUpdate && info.latest?.tag) {
+      if (sessionStorage.getItem(UPDATE_SEEN_KEY) !== info.latest.tag) {
+        updateDialogVisible.value = true
+        sessionStorage.setItem(UPDATE_SEEN_KEY, info.latest.tag)
+      }
+    }
+  } catch {
+    // 版本检查失败不影响页面
+  }
+}
+
+function openReleasePage() {
+  const url = versionInfo.value?.latest?.url
+  if (url) {
+    window.open(url, '_blank', 'noopener')
+  }
+}
+
 onMounted(async () => {
   const endLoading = globalLoadingStart('加载中...')
   try {
@@ -22,6 +67,7 @@ onMounted(async () => {
   } finally {
     endLoading()
   }
+  void loadVersion()
 })
 
 async function handleLogout() {
@@ -97,6 +143,25 @@ async function handleLogout() {
           <span class="page-title">{{ pageTitle }}</span>
         </div>
         <div class="header-right">
+          <el-tag
+            v-if="versionInfo"
+            size="small"
+            effect="plain"
+            class="version-tag"
+            @click="updateDialogVisible = true"
+          >
+            {{ currentVersionText }}
+          </el-tag>
+          <el-tag
+            v-if="versionInfo?.hasUpdate"
+            type="warning"
+            size="small"
+            effect="light"
+            class="version-tag"
+            @click="updateDialogVisible = true"
+          >
+            有新版本 v{{ latestTagText }}
+          </el-tag>
           <el-icon :size="18"><UserFilled /></el-icon>
           <span class="username">{{ session.username || '加载中...' }}</span>
           <el-tag size="small" :type="session.role === 'admin' ? 'danger' : 'info'" effect="light">
@@ -111,12 +176,63 @@ async function handleLogout() {
         <router-view />
       </el-main>
     </el-container>
+
+    <el-dialog v-model="updateDialogVisible" title="发现新版本" width="640px" append-to-body>
+      <template v-if="versionInfo?.latest">
+        <div class="update-meta">
+          <el-tag type="success" effect="light">最新版本 v{{ latestTagText }}</el-tag>
+          <span v-if="versionInfo.latest.publishedAt" class="update-date">
+            {{ formatDate(versionInfo.latest.publishedAt) }}
+          </span>
+          <span class="update-current">当前版本 {{ currentVersionText }}</span>
+        </div>
+        <pre class="release-notes">{{ versionInfo.latest.body || '暂无更新说明' }}</pre>
+      </template>
+      <div v-else class="release-notes">
+        {{ versionInfo?.error || '暂时无法获取更新信息' }}
+      </div>
+      <template #footer>
+        <el-button @click="updateDialogVisible = false">稍后</el-button>
+        <el-button type="primary" :disabled="!versionInfo?.latest?.url" @click="openReleasePage">
+          前往 GitHub
+        </el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
 <style scoped>
 .layout {
   height: 100%;
+}
+
+.version-tag {
+  cursor: pointer;
+}
+
+.update-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.release-notes {
+  max-height: 45vh;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  background: var(--el-fill-color-lighter);
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .layout-aside {

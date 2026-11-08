@@ -12,6 +12,8 @@ RUN pnpm build
 # ---- 后端构建（单文件 bundle + unix-dgram 原生模块）----
 FROM node:22-bookworm AS api-build
 WORKDIR /app/api
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
 RUN npm install -g pnpm@11 \
  && apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ \

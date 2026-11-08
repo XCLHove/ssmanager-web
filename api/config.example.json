@@ -8,5 +8,7 @@
   "dataDir": "data",
   "publicHost": "127.0.0.1",
   "publicBaseUrl": "",
-  "managerTimeoutMs": 3000
+  "managerTimeoutMs": 3000,
+  "githubRepo": "XCLHove/ssmanager-web",
+  "githubToken": ""
 }

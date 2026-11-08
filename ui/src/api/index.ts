@@ -110,8 +110,24 @@ export const serversApi = {
   remove: (port: number) => post<SimpleOk>('/servers/remove', { port }),
 }
 
+export interface LatestReleaseInfo {
+  tag: string
+  name: string | null
+  body: string | null
+  url: string
+  publishedAt: string | null
+}
+
+export interface VersionInfo {
+  current: string
+  latest: LatestReleaseInfo | null
+  hasUpdate: boolean
+  error: string | null
+}
+
 export const systemApi = {
   status: (config?: AxiosRequestConfig) => post<StatusResult>('/status', undefined, config),
+  version: (config?: AxiosRequestConfig) => post<VersionInfo>('/version', undefined, config),
 }
 
 /* ------------------------------ 管理员接口 ------------------------------ */
