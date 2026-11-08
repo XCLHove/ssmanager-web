@@ -74,12 +74,6 @@ export interface StatusResult {
   error?: string
 }
 
-/** 流量统计：supported 为 false 时表示后端不支持流量查询 */
-export interface StatsResult {
-  supported: boolean
-  [key: string]: unknown
-}
-
 function fetchLoginPublicKey() {
   return post<LoginPublicKeyResult>('/auth/public-key', {}, { skipEncryption: true })
 }
@@ -118,7 +112,6 @@ export const serversApi = {
 
 export const systemApi = {
   status: (config?: AxiosRequestConfig) => post<StatusResult>('/status', undefined, config),
-  stats: (config?: AxiosRequestConfig) => post<StatsResult>('/stats', undefined, config),
 }
 
 /* ------------------------------ 管理员接口 ------------------------------ */
@@ -162,6 +155,11 @@ export interface UserGrantsResult {
   ports: number[]
 }
 
+export interface RemoveUserResult {
+  ok: true
+  affectedPorts: number[]
+}
+
 /* ------------------------------ 用户接口 ------------------------------ */
 
 export interface UserServerPassword {
@@ -169,6 +167,11 @@ export interface UserServerPassword {
   slot: number
   url: string
   createdAt: number
+  /** 明文兼容订阅 URL；旧密码为 null */
+  plainUrl?: string | null
+  /** age 私钥；旧密码为 null */
+  agePrivateKey?: string | null
+  agePublicKey?: string | null
 }
 
 export interface UserServerItem {
@@ -193,6 +196,32 @@ export interface GeneratedUserPassword {
   password: string
   clientPassword: string
   url: string
+  plainUrl: string
+  agePrivateKey: string
+  agePublicKey: string
+}
+
+/* ------------------------------ 流量统计接口 ------------------------------ */
+
+export interface TrafficHistorySample {
+  t: number
+  rate: number
+  total: number
+  reset?: boolean
+}
+
+export interface TrafficHistoryLatest {
+  t: number
+  rate: number
+  total: number
+}
+
+export interface TrafficHistoryResult {
+  port: number
+  window: number
+  unit: string
+  samples: TrafficHistorySample[]
+  latest: TrafficHistoryLatest | null
 }
 
 /* ------------------------------ 模板接口 ------------------------------ */
@@ -212,6 +241,8 @@ export const adminApi = {
   servers: {
     reapply: (port: number) => post<SimpleOk>('/admin/servers/reapply', { port }),
   },
+  statsHistory: (port: number, seconds: number, config?: AxiosRequestConfig) =>
+    post<TrafficHistoryResult>('/admin/stats/history', { port, seconds }, config),
   templates: {
     get: (port: number) => post<TemplateGetResult>('/admin/templates/get', { port }),
     save: (port: number, format: string, code: string) =>
@@ -236,6 +267,8 @@ export const adminApi = {
       post<UserGrantsResult>('/admin/users/grants/get', { userId }),
     setGrants: (userId: number, ports: number[]) =>
       post<SimpleOk>('/admin/users/grants/set', { userId, ports }),
+    remove: (userId: number) =>
+      post<RemoveUserResult>('/admin/users/remove', { userId }),
   },
 }
 
@@ -248,4 +281,7 @@ export const userApi = {
       post<GeneratedUserPassword>('/user/passwords/generate', { port }),
     remove: (id: number) => post<SimpleOk>('/user/passwords/remove', { id }),
   },
+  /** oldPassword / newPassword 均为 md5 小写 hex */
+  changePassword: (oldPassword: string, newPassword: string) =>
+    post<SimpleOk>('/user/password/change', { oldPassword, newPassword }),
 }

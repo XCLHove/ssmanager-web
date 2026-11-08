@@ -2,10 +2,9 @@
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus } from '@element-plus/icons-vue'
-import { serversApi, systemApi, type ServerInfo, type StatsResult } from '@/api'
+import { serversApi, systemApi, type ServerInfo } from '@/api'
 import { globalLoadingStart } from '@/utils/loading'
 import StatusCard from '@/components/StatusCard.vue'
-import StatsTable from '@/components/StatsTable.vue'
 import ServerFormDrawer from '@/components/ServerFormDrawer.vue'
 
 const TemplateEditor = defineAsyncComponent(() => import('@/components/TemplateEditor.vue'))
@@ -16,7 +15,6 @@ type StatusState = 'checking' | 'ok' | 'error'
 const STATUS_POLL_INTERVAL = 30_000
 
 const servers = ref<ServerInfo[]>([])
-const stats = ref<StatsResult | null>(null)
 const drawerVisible = ref(false)
 const editingServer = ref<ServerInfo | null>(null)
 const templateVisible = ref(false)
@@ -29,9 +27,6 @@ const statusError = ref('')
 const statusUpdatedAt = ref('')
 
 let statusTimer: number | undefined
-
-// 后端不支持流量统计（supported: false）或请求失败时，整个流量区块隐藏
-const hasStats = computed(() => stats.value?.supported === true)
 
 const tableRows = computed(() => [...servers.value].sort((a, b) => a.port - b.port))
 
@@ -83,18 +78,6 @@ async function loadServers() {
     expandedPorts.value = expandedPorts.value.filter((port) => validPorts.has(port))
   } catch {
     // 错误提示已由 axios 拦截器统一处理
-  } finally {
-    endLoading()
-  }
-}
-
-async function loadStats() {
-  const endLoading = globalLoadingStart('加载流量统计...')
-  try {
-    stats.value = await systemApi.stats({ silent: true })
-  } catch {
-    // 统计接口失败时静默隐藏流量区块
-    stats.value = null
   } finally {
     endLoading()
   }
@@ -172,7 +155,6 @@ function openTemplate(server: ServerInfo) {
 onMounted(() => {
   void loadStatus()
   void loadServers()
-  void loadStats()
   // 定时轮询不显示全局 Loading
   statusTimer = window.setInterval(() => void loadStatus(false), STATUS_POLL_INTERVAL)
 })
@@ -285,8 +267,6 @@ onUnmounted(() => {
         </el-table-column>
       </el-table>
     </el-card>
-
-    <StatsTable v-if="hasStats && stats" :stats="stats" />
 
     <ServerFormDrawer v-model="drawerVisible" :server="editingServer" @success="handleFormSuccess" />
 

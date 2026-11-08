@@ -2,7 +2,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Monitor, SwitchButton, Ticket, User, UserFilled } from '@element-plus/icons-vue'
+import { Monitor, SwitchButton, Ticket, TrendCharts, User, UserFilled } from '@element-plus/icons-vue'
 import { clearAuth } from '@/utils/auth'
 import { resetPublicKeyCache } from '@/utils/crypto'
 import { globalLoadingStart } from '@/utils/loading'
@@ -63,6 +63,10 @@ async function handleLogout() {
             <el-icon><Monitor /></el-icon>
             <span>服务器管理</span>
           </el-menu-item>
+          <el-menu-item index="/stats">
+            <el-icon><TrendCharts /></el-icon>
+            <span>流量统计</span>
+          </el-menu-item>
           <el-menu-item index="/users">
             <el-icon><User /></el-icon>
             <span>用户管理</span>
@@ -75,6 +79,10 @@ async function handleLogout() {
         <el-menu-item v-else index="/my-servers">
           <el-icon><Monitor /></el-icon>
           <span>我的服务器</span>
+        </el-menu-item>
+        <el-menu-item v-if="session.role === 'user'" index="/account">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
