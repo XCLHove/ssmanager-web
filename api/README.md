@@ -226,11 +226,14 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
 
 `/api/admin/templates/*` 管理服务器一对一 JS 模板，目前仅支持 `clash` 格式。
 
+**模板库**：`/api/admin/templates/library/*` 提供可复用的模板 CRUD（表 `template_library`）。
+在服务器模板编辑器中选择「从模板库载入」会把库中代码**复制替换**到当前服务器模板，
+保存后成为该服务器自己的代码；之后修改或删除模板库条目不会影响已引用的服务器。
+
 - 模板签名：`(function (ctx, h) { ... return object | string })`；返回对象时用 `h.yaml()` 序列化。
 - `ctx`：`server{port,host,method,mode,noDelay,plugin,pluginOpts,pluginMode,password}`、
-  `user{id,username}`、`password{id,slot,psk,clientPassword,name}`、`token`、`generatedAt`、`format`。
-- `h`：`yaml(obj)`、`base64(str)`、`base64url(str)`、`ssLink({name,host,port,method,password})`（SIP002）、
-  `clientPassword(serverPsk,userPsk)`。
+  `user{id,username}`、`password{id,slot,psk,name}`、`token`、`generatedAt`、`format`。
+- `h`：`yaml(obj)`、`json(...args)`（等价于 `JSON.stringify(...args)`，可传 `value`、`replacer`、`space`）、`base64(str)`、`base64url(str)`、`ssLink({name,host,port,method,password})`（SIP002）。
 - 沙箱：`node:vm`，无 `require/process/console/Buffer`，禁用代码生成，执行超时 1000ms，
   代码上限 64KB；编译缓存按 port + code hash。
 - 保存/预览会先用假 ctx 试运行，语法错误、超时等返回 `400`。
@@ -492,9 +495,14 @@ ssmanager 不持久化动态 `add` 的服务器，重启即清空。本后端以
 | `POST` | `/api/admin/templates/get` | 读取模板 `{port}` → data `{format, code, defaultCode, updatedAt}` |
 | `POST` | `/api/admin/templates/save` | 保存模板 `{port, format:'clash', code}`（编译+试运行校验）→ data `{ok:true}` |
 | `POST` | `/api/admin/templates/preview` | 预览模板 `{port, code}` → data `{yaml}` |
+| `POST` | `/api/admin/templates/library/list` | 模板库列表 → data `{items:[{id,name,format,createdAt,updatedAt}]}` |
+| `POST` | `/api/admin/templates/library/get` | 模板库详情 `{id}` → data `{id,name,format,code,...}` |
+| `POST` | `/api/admin/templates/library/create` | 新建模板库 `{name, code, format?}` → data `{id}`；名称唯一、代码需可编译 |
+| `POST` | `/api/admin/templates/library/update` | 更新模板库 `{id, name, code, format?}` → data `{ok:true}` |
+| `POST` | `/api/admin/templates/library/remove` | 删除模板库 `{id}` → data `{ok:true}`；已复制到服务器的代码不受影响 |
 | `POST` | `/api/admin/stats/history` | 管理员流量历史 `{port, seconds:10-60}` → data `{port, window, unit:"bytes/s", samples:[{t,rate,total,reset}], latest}` |
 | `POST` | `/api/user/servers/list` | 用户授权服务器与密码槽（`maxSlots=1`）→ data `{items:[{port,host,method,configKnown,templateReady,canGenerate,maxSlots,passwords:[{id,slot,url,plainUrl,agePrivateKey,agePublicKey,createdAt}]}]}` |
-| `POST` | `/api/user/passwords/generate` | 生成用户密码 `{port}`（`slot=1`）→ data `{id,slot,password,clientPassword,url,plainUrl,agePrivateKey,agePublicKey}`；已有密码时 `400`“每个服务器最多 1 个密码” |
+| `POST` | `/api/user/passwords/generate` | 生成用户密码 `{port}`（`slot=1`）→ data `{id,slot,password,url,plainUrl,agePrivateKey,agePublicKey}`；已有密码时 `400`“每个服务器最多 1 个密码” |
 | `POST` | `/api/user/passwords/remove` | 删除本人密码 `{id}` → data `{ok:true}` |
 | `POST` | `/api/user/password/change` | 自助修改登录密码 `{oldPassword, newPassword}(均为 MD5)` → data `{ok:true}`；成功后该用户所有会话失效；配置管理员返回 `400` |
 | `GET` | `/sub/:token` | 公开订阅（非信封）：有 age 密钥时返回 age armored `text/plain`，否则 `text/yaml`；`?plain=1` 强制明文；无效/禁用/撤销 `404`，模板/加密错误 `500` |

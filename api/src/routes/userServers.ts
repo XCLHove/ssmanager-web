@@ -101,7 +101,7 @@ router.post('/passwords/generate', requireAuth, requireUserSession, decryptReque
   }
 
   try {
-    const { record, mainPassword } = await getServerMount(port);
+    const { record } = await getServerMount(port);
     const rows = listPasswordsForUserPort(userId, port);
     if (rows.length >= MAX_SLOTS) {
       return fail(res, 400, '每个服务器最多 1 个密码');
@@ -151,7 +151,6 @@ router.post('/passwords/generate', requireAuth, requireUserSession, decryptReque
       id,
       slot,
       password: psk,
-      clientPassword: `${mainPassword}:${psk}`,
       url,
       plainUrl: `${url}?plain=1`,
       agePrivateKey,

@@ -30,7 +30,7 @@ export const DEFAULT_TEMPLATE_CODE = `function (ctx, h) {
     server: ctx.server.host,
     port: ctx.server.port,
     cipher: ctx.server.method,
-    password: h.clientPassword(ctx.server.password, ctx.password.psk),
+    password: ctx.server.password + ':' + ctx.password.psk,
     udp: true,
   };
   if (ctx.server.plugin) {
@@ -48,9 +48,9 @@ export const DEFAULT_TEMPLATE_CODE = `function (ctx, h) {
 
 const HELPERS = Object.freeze({
   yaml: (obj) => yamlStringify(obj),
+  json: (...args: Parameters<typeof JSON.stringify>) => JSON.stringify(...args),
   base64: (str) => Buffer.from(String(str), 'utf8').toString('base64'),
   base64url: (str) => Buffer.from(String(str), 'utf8').toString('base64url'),
-  clientPassword: (serverPsk, userPsk) => `${serverPsk}:${userPsk}`,
   ssLink: ({ name, host, port, method, password }) => {
     const userinfo = Buffer.from(`${method}:${password}`, 'utf8').toString('base64url');
     const hostPart = String(host).includes(':') ? `[${host}]` : host;
@@ -85,6 +85,11 @@ function compile(port, code) {
 
   compileCache.set(key, script);
   return script;
+}
+
+/** 仅校验模板可编译（不执行，不依赖服务器上下文）；供模板库保存使用 */
+export function validateTemplateCode(code: string): void {
+  compile(0, code);
 }
 
 function render(port, code, ctx) {
@@ -150,7 +155,6 @@ function buildPreviewContext(record) {
       id: 1,
       slot: 1,
       psk: fakeUserPsk,
-      clientPassword: `${serverPsk}:${fakeUserPsk}`,
       name: 'ssm_u1_p1',
     },
     token: 'preview-token',

@@ -53,7 +53,6 @@ router.get('/:token', async (req, res) => {
         id: row.id,
         slot: row.slot,
         psk: row.password,
-        clientPassword: `${serverPsk}:${row.password}`,
         name: row.ss_name,
       },
       token: req.params.token,
