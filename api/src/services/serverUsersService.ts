@@ -1,7 +1,8 @@
 /**
  * ssmanager 多用户（2022-blake3-* EIH users）重建服务。
  *
- * users 仅来自 DB（user_server_passwords），名称固定 `ssm_u<userId>_p<slot>`。
+ * users 仅来自 DB 中已启用用户的密码行（user_server_passwords JOIN users.enabled = 1），
+ * 名称固定 `ssm_u<userId>_p<slot>`。
  * 每次变更执行：list 读取旧 users → removeServer → 短延迟 → addServer(主PSK + DB users)，
  * addServer 内部会 list 复核。失败时尝试用旧 users 恢复。
  *
@@ -10,7 +11,7 @@
 
 import { managerClient } from '../managerClient.js';
 import { getServerRecord } from '../serverStore.js';
-import { listPasswordsForPort } from '../stores/passwordStore.js';
+import { listEnabledPasswordsForPort } from '../stores/passwordStore.js';
 import type { ServerOptions, ServerRecord, ServerUser } from '../types/models.js';
 
 export class ServerUsersError extends Error {
@@ -59,9 +60,9 @@ function withPortLock(port: number, task: () => Promise<any>): Promise<any> {
   return queued;
 }
 
-/** 当前端口的托管 users（仅 DB） */
+/** 当前端口的托管 users（仅 DB 中已启用用户） */
 function managedUsers(port: number): ServerUser[] {
-  return listPasswordsForPort(port).map((row: any) => ({
+  return listEnabledPasswordsForPort(port).map((row: any) => ({
     name: `ssm_u${row.user_id}_p${row.slot}`,
     password: row.password,
   }));

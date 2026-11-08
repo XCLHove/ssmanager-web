@@ -88,7 +88,8 @@ async function toggleEnabled(user: AdminUserItem, enabled: boolean) {
     user.enabled = enabled
     ElMessage.success(enabled ? '用户已启用' : '用户已禁用')
   } catch {
-    // 错误提示已由 axios 拦截器统一处理
+    // 可能已更新状态但端口重建失败，重新拉取以反映实际状态；错误提示由 axios 拦截器统一处理
+    await loadUsers()
   } finally {
     endLoading()
   }

@@ -2,9 +2,14 @@
 
 import { db } from '../db.js';
 
-export function listPasswordsForPort(port) {
+export function listEnabledPasswordsForPort(port) {
   return db
-    .prepare('SELECT * FROM user_server_passwords WHERE server_port = ? ORDER BY slot')
+    .prepare(`
+      SELECT p.* FROM user_server_passwords p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.server_port = ? AND u.enabled = 1
+      ORDER BY p.slot
+    `)
     .all(Number(port));
 }
 
@@ -72,11 +77,6 @@ export function getPasswordPortsForUser(userId: number): number[] {
     .prepare('SELECT DISTINCT server_port FROM user_server_passwords WHERE user_id = ? ORDER BY server_port')
     .all(Number(userId))
     .map((row: any) => row.server_port);
-}
-
-/** 删除某用户的全部密码（删除用户时使用） */
-export function deletePasswordsForUser(userId: number): void {
-  db.prepare('DELETE FROM user_server_passwords WHERE user_id = ?').run(Number(userId));
 }
 
 /** 回滚用：按原 id 恢复一行（用于重建失败时还原刚删除的记录） */

@@ -163,12 +163,12 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
 - 仅 `2022-blake3-*` 且存在本地配置的服务器可授权、可生成用户密码。
 - 用户每个授权服务器仅允许 **1 个密码**（新密码固定 `slot=1`；历史 `slot=2` 数据保留、照实返回）；
   每个密码对应 ssmanager 托管用户 `ssm_u<userId>_p<slot>`，并生成独立订阅 URL。
-- 密码增删都会重建该端口：`removeServer` → 短延迟 → `addServer(主PSK + DB 中全部托管 users)`
+- 密码增删都会重建该端口：`removeServer` → 短延迟 → `addServer(主PSK + DB 中全部已启用用户的托管 users)`
   → `list` 复核。失败时尝试用旧 users 恢复；仍失败返回 `502`，DB 不变，可用
   `POST /api/admin/servers/reapply {port}` 重试。
 - `/api/servers/list` 的 `servers[].users` 会解析 `ssm_u<userId>_p<slot>` 批量补充 `username`
   （查不到或手工用户不输出该字段）；`name`/`password` 字段保持不变。
-- 托管 users **只来自数据库**；`/api/servers/add|update` 会忽略请求中的手工 `users`。
+- 托管 users **只来自数据库**中的已启用用户；`/api/servers/add|update` 会忽略请求中的手工 `users`。
   已有用户密码时禁止改端口、禁止改成非 2022-blake3-* 方法。
 - 订阅 URL：配置了 `publicBaseUrl` 时后端返回该地址下的绝对 URL（兜底）；未配置时返回相对路径
   `/sub/<token>`，前端按当前页面 origin 补全，公开 GET。新密码默认返回
@@ -206,22 +206,36 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
 - 成功：重新 scrypt 哈希并更新 `updated_at`，使该用户所有会话立即失效，返回 `{ok:true}`；
   需要用新密码重新登录。
 
+### 启停用户（管理员）
+
+`POST /api/admin/users/set-enabled {userId, enabled}`：
+
+- 停用：踢掉该用户所有会话，并从 ssmanager users 中移除该用户；
+- 启用：重新把该用户加入 ssmanager users；
+- 仅当启停状态实际发生变化时，才会对该用户密码涉及的端口逐个 `applyFromDb` 重建
+  （users 只包含 DB 中已启用用户的密码行），其他用户不受影响；
+- 端口重建失败时返回 `502`「用户状态已更新，但端口 X 重建失败，请重试」；
+  DB 中的启用状态不回滚（操作意图已生效），可重试或调用
+  `POST /api/admin/servers/reapply {port}` 完成重建。
+
 ### 删除用户（管理员）
 
 `POST /api/admin/users/remove {userId}`：
 
-1. 收集该用户授权与密码涉及的端口；
-2. 显式删除其 `user_server_passwords` 与 `user_server_grants`；
-3. 对每个端口 `applyFromDb` 重建 ssmanager users（清除该用户的 `ssm_u*` 条目）；
-4. 全部成功后删除 `users` 行、踢下线并返回 `{ok:true, affectedPorts}`。
+1. 收集该用户授权与密码涉及的端口（用于响应的 `affectedPorts`）；
+2. 对该用户有密码行的端口逐个处理：读取该端口密码行快照 → 删除密码行 →
+   `applyFromDb` 重建 ssmanager users（清除该用户的 `ssm_u*` 条目）；
+3. 全部端口重建成功后，删除 `user_server_grants`、`users` 行，踢下线并返回
+   `{ok:true, affectedPorts}`。
 
 后果：该用户的授权、密码、全部订阅 URL 立即失效（404），旧 token 立即 401；
 `registration_codes.used_by_user_id` 通过 `ON DELETE SET NULL` 保留已使用注册码
 （`usedByUsername` 为空，前端可显示“已删除用户”）。
 
-若任一端口重建失败：接口返回 `502`「删除失败，端口 X 重建失败，请重试」，
-**不删除 users 行**；此时授权/密码已删除，用户无法再生成/使用，可用
-`/api/admin/servers/reapply` 或后续恢复流程继续清理管理器中的残留用户。
+若某端口重建失败：接口返回 `502`「删除失败，端口 X 重建失败，请重试」；
+此时恢复该端口的密码行快照，授权与 `users` 行均保留，可直接重试删除
+（重试会继续清理密码行与管理器中的残留用户），也可调用
+`POST /api/admin/servers/reapply {port}`。
 
 ## 配置模板
 
@@ -497,9 +511,9 @@ ssmanager 不持久化动态 `add` 的服务器，重启即清空。本后端以
 | `POST` | `/api/admin/codes/list` | 注册码列表 `{status?:unused\|used}` → data `{items, unused, used}` |
 | `POST` | `/api/admin/codes/remove` | 删除未使用注册码 `{id}` → data `{ok:true}`；已使用 `400` |
 | `POST` | `/api/admin/users/list` | 用户列表 `{keyword?,page?,pageSize?}` → data `{total, items}` |
-| `POST` | `/api/admin/users/set-enabled` | 启停用户 `{userId, enabled}`；禁用时踢会话 → data `{ok:true}` |
+| `POST` | `/api/admin/users/set-enabled` | 启停用户 `{userId, enabled}`；禁用时踢会话，并按该用户密码涉及端口重建 ssmanager users（停用移除、启用重新加入） → data `{ok:true}`；重建失败 `502` |
 | `POST` | `/api/admin/users/reset-password` | 重置密码 `{userId, password(MD5)}`；踢会话 → data `{ok:true}` |
-| `POST` | `/api/admin/users/remove` | 删除用户 `{userId}` → data `{ok:true, affectedPorts}`；授权/密码/订阅失效，已使用注册码保留 |
+| `POST` | `/api/admin/users/remove` | 删除用户 `{userId}` → data `{ok:true, affectedPorts}`；按端口删密码行并重建，失败时恢复该端口密码行并保留授权/用户，可安全重试；全部成功后才删授权/用户 |
 | `POST` | `/api/admin/users/grants/get` | 查询授权端口 `{userId}` → data `{ports}` |
 | `POST` | `/api/admin/users/grants/set` | 设置授权端口 `{userId, ports}`（仅 2022-blake3-* 且有本地配置）；撤销时删密码行→重建→删授权 → data `{ok:true, affectedPorts}` |
 | `POST` | `/api/admin/servers/reapply` | 按数据库 users 重建端口 `{port}` → data `{ok:true}` |

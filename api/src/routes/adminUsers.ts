@@ -6,7 +6,6 @@ import { hashPassword } from '../auth/password.js';
 import { getAllServerConfigs } from '../serverStore.js';
 import { addGrant, getGrantPorts, removeGrant, removeGrantsForUser } from '../stores/grantStore.js';
 import {
-  deletePasswordsForUser,
   deletePasswordsForUserPort,
   getPasswordPortsForUser,
   listPasswordsForUserPort,
@@ -51,7 +50,7 @@ router.post('/list', requireAuth, requireAdmin, decryptRequest, (req, res) => {
 });
 
 // POST /api/admin/users/set-enabled {userId, enabled}
-router.post('/set-enabled', requireAuth, requireAdmin, decryptRequest, (req, res) => {
+router.post('/set-enabled', requireAuth, requireAdmin, decryptRequest, async (req, res) => {
   const userId = Number(req.body?.userId);
   const enabled = req.body?.enabled;
 
@@ -67,9 +66,35 @@ router.post('/set-enabled', requireAuth, requireAdmin, decryptRequest, (req, res
     return fail(res, 400, '用户不存在');
   }
 
+  const ports = getPasswordPortsForUser(userId);
+  const changed = (user.enabled === 1) !== enabled;
+
   setUserEnabled(userId, enabled);
   if (!enabled) {
     revokeUserSessions(user.username);
+  }
+
+  const failedPorts: number[] = [];
+  if (changed) {
+    for (const port of ports) {
+      try {
+        await applyFromDb(port);
+      } catch (err: any) {
+        console.error(
+          `[admin/users] 更新用户 ${userId} 状态后重建端口 ${port} 失败:`,
+          err?.message || err
+        );
+        failedPorts.push(port);
+      }
+    }
+  }
+
+  if (failedPorts.length > 0) {
+    return fail(
+      res,
+      502,
+      `用户状态已更新，但端口 ${failedPorts.join(', ')} 重建失败，请重试`
+    );
   }
   return okEncrypted(res, req.session, { ok: true });
 });
@@ -179,7 +204,8 @@ router.post('/grants/set', requireAuth, requireAdmin, decryptRequest, async (req
 });
 
 // POST /api/admin/users/remove {userId}
-// 删除用户：先删授权/密码并重建相关端口（清除 ssmanager 中的 EIH users），全部成功后再删用户。
+// 删除用户：按端口删除密码行并重建（清除 ssmanager 中的 EIH users），
+// 失败时恢复该端口密码行并保留授权/用户，可安全重试；全部成功后才删授权与用户。
 router.post('/remove', requireAuth, requireAdmin, decryptRequest, async (req, res) => {
   const userId = Number(req.body?.userId);
   if (!Number.isInteger(userId)) {
@@ -191,31 +217,34 @@ router.post('/remove', requireAuth, requireAdmin, decryptRequest, async (req, re
     return fail(res, 400, '用户不存在');
   }
 
+  const passwordPorts = getPasswordPortsForUser(userId);
   const affectedPorts = [
-    ...new Set([...getGrantPorts(userId), ...getPasswordPortsForUser(userId)]),
+    ...new Set([...getGrantPorts(userId), ...passwordPorts]),
   ].sort((a, b) => a - b);
 
-  // 先删本地授权/密码，使重建时该用户不再出现在 users 中
-  deletePasswordsForUser(userId);
-  removeGrantsForUser(userId);
+  for (const port of passwordPorts) {
+    const snapshots = listPasswordsForUserPort(userId, port);
+    deletePasswordsForUserPort(userId, port);
 
-  let failedPort: number | null = null;
-  for (const port of affectedPorts) {
     try {
       await applyFromDb(port);
     } catch (err: any) {
+      for (const row of snapshots) {
+        try {
+          restorePasswordRow(row);
+        } catch {
+          // 恢复失败时仍返回原始错误
+        }
+      }
       console.error(
         `[admin/users] 删除用户 ${userId} 时重建端口 ${port} 失败:`,
         err?.message || err
       );
-      if (failedPort === null) failedPort = port;
+      return fail(res, 502, `删除失败，端口 ${port} 重建失败，请重试`);
     }
   }
 
-  if (failedPort !== null) {
-    return fail(res, 502, `删除失败，端口 ${failedPort} 重建失败，请重试`);
-  }
-
+  removeGrantsForUser(userId);
   deleteUser(userId);
   revokeUserSessions(user.username);
   return okEncrypted(res, req.session, { ok: true, affectedPorts });
