@@ -45,16 +45,19 @@ function sendServiceError(res, err) {
   return fail(res, 500, '服务器内部错误');
 }
 
-function subscriptionBase(req) {
-  const configured = String(config.publicBaseUrl || '').trim();
-  const base = configured || `${req.protocol}://${req.get('host')}`;
-  return base.replace(/\/+$/, '');
+/**
+ * 订阅 URL：配置了 publicBaseUrl 时返回绝对 URL（兜底），
+ * 否则返回相对路径，由前端按当前页面地址补全。
+ */
+export function subscriptionUrl(token: string, plain = false): string {
+  const base = String(config.publicBaseUrl || '').trim().replace(/\/+$/, '');
+  const path = `/sub/${token}${plain ? '?plain=1' : ''}`;
+  return base ? `${base}${path}` : path;
 }
 
 // POST /api/user/servers/list → {items:[...]}
 router.post('/servers/list', requireAuth, requireUserSession, decryptRequest, (req, res) => {
   const userId = req.session.userId;
-  const base = subscriptionBase(req);
 
   const items = getGrantPorts(userId).map((port) => {
     const record = getServerRecord(port);
@@ -76,8 +79,8 @@ router.post('/servers/list', requireAuth, requireUserSession, decryptRequest, (r
       passwords: rows.map((row) => ({
         id: row.id,
         slot: row.slot,
-        url: `${base}/sub/${row.subscription_token}`,
-        plainUrl: `${base}/sub/${row.subscription_token}?plain=1`,
+        url: subscriptionUrl(row.subscription_token),
+        plainUrl: subscriptionUrl(row.subscription_token, true),
         agePrivateKey: row.age_private_key ?? null,
         agePublicKey: row.age_public_key ?? null,
         createdAt: row.created_at,
@@ -145,8 +148,7 @@ router.post('/passwords/generate', requireAuth, requireUserSession, decryptReque
       return sendServiceError(res, err);
     }
 
-    const base = subscriptionBase(req);
-    const url = `${base}/sub/${subscriptionToken}`;
+    const url = subscriptionUrl(subscriptionToken);
     return okEncrypted(res, req.session, {
       id,
       slot,

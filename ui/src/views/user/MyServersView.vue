@@ -10,6 +10,7 @@ import {
 import SubscribeDialog from '@/components/SubscribeDialog.vue'
 import { copyText } from '@/utils/clipboard'
 import { globalLoadingStart } from '@/utils/loading'
+import { toAbsoluteUrl } from '@/utils/url'
 
 const servers = ref<UserServerItem[]>([])
 
@@ -173,12 +174,17 @@ onMounted(() => {
                   {{ entry.password.agePrivateKey ? 'age 加密' : '未加密' }}
                 </el-tag>
                 <el-input
-                  :model-value="entry.password.url"
+                  :model-value="toAbsoluteUrl(entry.password.url)"
                   readonly
                   size="small"
                   class="slot-url"
                 />
-                <el-button size="small" @click="copyText(entry.password.url)">复制</el-button>
+                <el-button
+                  size="small"
+                  @click="copyText(toAbsoluteUrl(entry.password.url))"
+                >
+                  复制
+                </el-button>
                 <el-button
                   size="small"
                   type="primary"

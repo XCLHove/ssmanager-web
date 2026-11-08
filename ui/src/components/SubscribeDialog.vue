@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { toDataURL } from 'qrcode'
 import { copyText } from '@/utils/clipboard'
 import { globalLoadingStart } from '@/utils/loading'
+import { toAbsoluteUrl } from '@/utils/url'
 
 const visible = defineModel<boolean>({ default: false })
 
@@ -17,17 +18,8 @@ const props = defineProps<{
 const qrDataUrl = ref('')
 let importTimer: number | undefined
 
-function toAbsolute(url?: string | null): string {
-  if (!url) return ''
-  try {
-    return new URL(url, window.location.origin).toString()
-  } catch {
-    return url
-  }
-}
-
-const absoluteUrl = computed(() => toAbsolute(props.url))
-const absolutePlainUrl = computed(() => toAbsolute(props.plainUrl))
+const absoluteUrl = computed(() => toAbsoluteUrl(props.url))
+const absolutePlainUrl = computed(() => toAbsoluteUrl(props.plainUrl))
 const isAgeEncrypted = computed(() => !!props.agePrivateKey)
 const downloadUrl = computed(() => absolutePlainUrl.value || absoluteUrl.value)
 const downloadLabel = computed(() =>

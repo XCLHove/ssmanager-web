@@ -170,7 +170,8 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
   （查不到或手工用户不输出该字段）；`name`/`password` 字段保持不变。
 - 托管 users **只来自数据库**；`/api/servers/add|update` 会忽略请求中的手工 `users`。
   已有用户密码时禁止改端口、禁止改成非 2022-blake3-* 方法。
-- 订阅 URL：`<publicBaseUrl 或请求 origin>/sub/<token>`，公开 GET。新密码默认返回
+- 订阅 URL：配置了 `publicBaseUrl` 时后端返回该地址下的绝对 URL（兜底）；未配置时返回相对路径
+  `/sub/<token>`，前端按当前页面 origin 补全，公开 GET。新密码默认返回
   **age 加密的 ClashMeta YAML**；`?plain=1` 返回明文兼容内容。
 - `/api/user/*` 仅供普通用户（配置管理员 userId=null 返回 `403`）。
 - `templateReady` 表示管理员是否为该服务器保存过自定义模板；未保存时订阅使用内置默认模板。
@@ -306,7 +307,7 @@ node dist/server.mjs --config=/path/to/config.json
 | `jwtExpiresIn` | `12h` | 登录会话有效期，支持 `ms/s/m/h/d` |
 | `dataDir` | `data` | SQLite 数据目录；相对路径基于 `PACKAGE_ROOT`，支持绝对路径；DB 文件固定为 `<dataDir>/ssmanager-web.db` |
 | `publicHost` | `127.0.0.1` | 客户端连接使用的公网主机/域名（端口沿用服务器端口） |
-| `publicBaseUrl` | 空 | 订阅绝对 URL 的基础地址（如 `https://ss.example.com`）；为空时使用请求的 Host |
+| `publicBaseUrl` | 空 | 订阅 URL 兜底基础地址（如 `https://ss.example.com`）；为空时返回相对路径，由前端按页面地址解析 |
 | `managerTimeoutMs` | `3000` | 与 ssmanager 通信超时（毫秒） |
 | `githubRepo` | `XCLHove/ssmanager-web` | 用于检查最新 Release 的 GitHub 仓库（`owner/repo`） |
 | `githubToken` | 空 | 可选 GitHub Token；私有仓库或需要提高 API 限额时配置 |
@@ -343,10 +344,14 @@ node dist/server.mjs --config=/path/to/config.json
 
 直接编辑 `config.json`：
 
-- 局域网/公网部署：`"publicHost": "ss.example.com"`、`"publicBaseUrl": "https://ss.example.com"`；
+- 局域网/公网部署：`"publicHost": "ss.example.com"`；
+- 订阅地址兜底：`"publicBaseUrl": "https://ss.example.com"`（留空则前端按页面地址解析）；
 - 修改监听端口：`"webPort": 3000`；
 - 自定义数据目录：`"dataDir": "D:/ssmanager-data"`（绝对路径）或相对 `PACKAGE_ROOT` 的路径；
 - Unix socket 连接的 ssmanager：`"ssmanagerAddress": "unix:/run/ssmanager.sock"`。
+
+未配置 `publicBaseUrl` 时，订阅 URL 由前端按当前页面地址（`window.location.origin`）解析；
+HTTPS 页面会自动生成 HTTPS 订阅链接。配置后则始终使用配置的地址。
 
 ### Unix socket 模式说明
 

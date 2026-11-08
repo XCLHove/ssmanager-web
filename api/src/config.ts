@@ -233,7 +233,10 @@ export const config = {
   /** 客户端可见的公网主机（订阅/节点地址使用） */
   publicHost: String(valueOrDefault(fileConfig.publicHost, '127.0.0.1')),
 
-  /** 订阅绝对 URL 的基础地址（可空；为空时后续使用请求的 host） */
+  /**
+   * 订阅 URL 的兜底基础地址（可空）。
+   * 配置后后端返回绝对 URL；为空时返回相对路径，由前端按当前页面地址补全。
+   */
   publicBaseUrl: String(valueOrDefault(fileConfig.publicBaseUrl, '')),
 
   /** 与 ssmanager 通信的超时（毫秒） */
