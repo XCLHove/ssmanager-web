@@ -1,5 +1,5 @@
 /**
- * esbuild 单文件打包：把 express/cors/dotenv/yaml 等全部内联到 dist/server.mjs。
+ * esbuild 单文件打包：把 express/cors/yaml 等全部内联到 dist/server.mjs。
  *
  * unix-dgram 保持 external，并在构建后把该可选原生模块及其运行期依赖复制到
  * dist/node_modules/，使携带 Unix socket 支持的部署目录无需再 npm install。

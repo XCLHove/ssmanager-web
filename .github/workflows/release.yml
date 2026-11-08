@@ -49,13 +49,13 @@ jobs:
       - name: Package deployment bundle
         run: |
           TAG="${GITHUB_REF_NAME}"
-          mkdir -p release/ssmanager-web/ui
+          # UI_DIST_DIR 固定为 <PACKAGE_ROOT>/../ui/dist，因此 ui/ 与 ssmanager-web/ 平级
+          mkdir -p release/ssmanager-web release/ui
           cp -R api/dist release/ssmanager-web/dist
-          cp -R ui/dist release/ssmanager-web/ui/dist
+          cp -R ui/dist release/ui/dist
           cp api/config.example.json release/ssmanager-web/config.example.json
-          cp api/.env.example release/ssmanager-web/.env.example
           cp api/README.md release/ssmanager-web/README.md
-          tar -C release -czf "ssmanager-web-${TAG}.tar.gz" ssmanager-web
+          tar -C release -czf "ssmanager-web-${TAG}.tar.gz" ssmanager-web ui
           ls -lh "ssmanager-web-${TAG}.tar.gz"
 
       - name: Publish GitHub Release

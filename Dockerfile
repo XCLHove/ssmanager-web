@@ -25,14 +25,13 @@ RUN pnpm build
 
 # ---- 运行时 ----
 FROM node:22-bookworm-slim AS runtime
-ENV NODE_ENV=production \
-    SSMANAGER_UI_DIR=/app/ui/dist
+ENV NODE_ENV=production
 WORKDIR /app
 
+# server.mjs 位于 /app/dist，PACKAGE_ROOT=/app；前端目录固定为 <PACKAGE_ROOT>/../ui/dist
 COPY --from=api-build /app/api/dist ./dist
-COPY --from=ui-build /app/ui/dist ./ui/dist
+COPY --from=ui-build /app/ui/dist /ui/dist
 COPY api/config.example.json ./config.example.json
-COPY api/.env.example ./.env.example
 COPY api/README.md ./README.md
 
 RUN mkdir -p /app/data && chown -R node:node /app
@@ -41,6 +40,6 @@ USER node
 VOLUME ["/app/data"]
 EXPOSE 3000
 
-# 未挂载 config.json 时使用环境变量或内置默认值；挂载示例：
+# 必须挂载配置文件（示例）：
 #   docker run ... -v $PWD/config.json:/app/config.json:ro
-CMD ["node", "--disable-warning=ExperimentalWarning", "dist/server.mjs"]
+CMD ["node", "--disable-warning=ExperimentalWarning", "dist/server.mjs", "-c", "/app/config.json"]

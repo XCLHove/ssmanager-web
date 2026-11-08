@@ -6,25 +6,50 @@ shadowsocks-rust `ssmanager` 的 Web 管理面板：多用户、注册码、服�
 - 前端：`ui/`（Vite 8 + Vue 3 + Element Plus）
 - 运行要求：Node.js 22（后端）、pnpm 11（开发/构建）
 
+所有配置只从配置文件读取，**不再读取环境变量或 `.env`**；启动时必须用
+`-c <path>`（或 `--config <path>` / `--config=<path>`）指定配置文件。
+
 ## 开发
 
 ```bash
-# 后端
-cd api && pnpm install && pnpm dev
+# 后端（首次先复制配置示例）
+cd api
+cp config.example.json config.json
+pnpm install
+pnpm dev -- -c config.json
 
 # 前端（另开终端，dev 代理 /api → localhost:3000）
 cd ui && pnpm install && pnpm dev
 ```
 
-## 构建
+## 构建与单文件部署
 
 ```bash
 cd ui && pnpm install && pnpm build      # 产出 ui/dist
 cd api && pnpm install && pnpm build     # 产出 api/dist（server.mjs + node_modules/unix-dgram）
 ```
 
-单文件部署：复制 `api/dist`、`ui/dist`，并将 `api/config.example.json` 复制为 `config.json` 后修改，用 `node dist/server.mjs` 启动，无需安装依赖。
-详细配置见 [api/README.md](api/README.md)。
+后端固定从 `<PACKAGE_ROOT>/../ui/dist` 托管前端（`PACKAGE_ROOT` 为 `server.mjs`
+所在 `dist/` 的上一级），因此推荐布局：
+
+```text
+deploy/
+├── ui/
+│   └── dist/
+└── ssmanager-web/
+    ├── config.json          # cp api/config.example.json config.json
+    └── dist/
+        ├── server.mjs
+        └── node_modules/    # unix-dgram 及其依赖
+```
+
+```bash
+cd deploy/ssmanager-web
+node --disable-warning=ExperimentalWarning dist/server.mjs -c config.json
+```
+
+无需 `pnpm install`。只使用 API、不需要前端时，可只保留 `ssmanager-web/`。
+详细配置与 Unix socket 说明见 [api/README.md](api/README.md)。
 
 ## 发布
 
@@ -38,7 +63,8 @@ git push origin v1.0.0
 流水线会：
 
 1. 构建前端与后端单文件产物；
-2. 打包 `ssmanager-web-v1.0.0.tar.gz`（含 `dist/`、`ui/dist/`、配置示例与 README）并发布到 GitHub Release；
+2. 打包 `ssmanager-web-v1.0.0.tar.gz`（包含平级的 `ssmanager-web/` 与 `ui/`、
+   `config.example.json` 与 README）并发布到 GitHub Release；
 3. 构建 Docker 镜像并推送到 GitHub Container Registry：
    - `ghcr.io/xclhove/ssmanager-web:1.0.0`
    - `ghcr.io/xclhove/ssmanager-web:1.0`
@@ -49,34 +75,34 @@ git push origin v1.0.0
 ## Docker 运行
 
 ```bash
+# 1. 准备配置文件（至少修改密码；宿主机 ssmanager 用 host.docker.internal:6100）
+cp api/config.example.json config.json
+vi config.json
+
+# 2. 启动（配置文件以只读方式挂载）
 docker run -d --name ssmanager-web \
   -p 3000:3000 \
+  -v "$PWD/config.json:/app/config.json:ro" \
   -v "$PWD/data:/app/data" \
-  -e SSMANAGER_WEB_USERNAME=admin \
-  -e SSMANAGER_WEB_PASSWORD='change-me' \
-  -e SSMANAGER_ADDRESS=host.docker.internal:6100 \
-  -e SSMANAGER_PUBLIC_HOST=ss.example.com \
-  -e SSMANAGER_PUBLIC_BASE_URL=https://ss.example.com \
   --add-host=host.docker.internal:host-gateway \
   ghcr.io/xclhove/ssmanager-web:latest
 ```
 
-- **ssmanager 在宿主机**：Docker Desktop 可直接使用 `host.docker.internal`；Linux 需加
-  `--add-host=host.docker.internal:host-gateway`，或使用 `--network host` 并配置
-  `SSMANAGER_ADDRESS=127.0.0.1:6100`。
-- **Unix socket**：`-v /run/ssmanager.sock:/run/ssmanager.sock` +
-  `-e SSMANAGER_ADDRESS=unix:/run/ssmanager.sock`。
-- **配置文件**：`-v "$PWD/config.json:/app/config.json:ro"`；不挂载时使用环境变量与内置默认值。
-- **数据**：SQLite 默认位于 `/app/data`，务必挂载持久化。
+- 容器内固定执行 `dist/server.mjs -c /app/config.json`；未挂载配置文件会直接报错退出。
+- **ssmanager 在宿主机**：在 `config.json` 中设置
+  `"ssmanagerAddress": "host.docker.internal:6100"`；Linux 需上面的 `--add-host`，
+  或使用 `--network host` 并在配置中写 `127.0.0.1:6100`。
+- **Unix socket**：挂载 `-v /run/ssmanager.sock:/run/ssmanager.sock`，并在 `config.json`
+  设置 `"ssmanagerAddress": "unix:/run/ssmanager.sock"`。
+- **数据**：SQLite 默认位于 `/app/data`（由配置 `dataDir` 决定），务必挂载持久化。
+- **端口**：容器监听配置中的 `webPort`（默认 3000），请与 `-p` 映射保持一致。
 
 ## Docker Compose
 
-仓库根目录已提供 `compose.yaml` 与 `.env.example`。
-
 ```bash
-# 1. 准备环境变量（必须修改 SSMANAGER_WEB_PASSWORD）
-cp .env.example .env
-vi .env
+# 1. 准备配置文件（必须修改密码等）
+cp api/config.example.json config.json
+vi config.json
 
 # 2. 启动（ssmanager 需已在宿主机运行）
 docker compose up -d
@@ -86,7 +112,9 @@ docker compose ps
 docker compose logs -f
 ```
 
-浏览器访问 `http://localhost:3000`（端口由 `.env` 的 `WEB_PORT` 控制）。
+`compose.yaml` 已将 `./config.json` 只读挂载到 `/app/config.json`，端口固定映射
+`3000:3000`（请保持配置中 `webPort: 3000`），数据使用命名卷 `ssmanager-data`。
+不再使用 `.env` 或任何环境变量。
 
 常用操作：
 
@@ -104,23 +132,10 @@ docker compose up -d
 docker compose up -d --build
 ```
 
-`.env` 关键项：
-
-| 变量 | 说明 |
-| --- | --- |
-| `SSMANAGER_WEB_USERNAME` / `SSMANAGER_WEB_PASSWORD` | 管理员账号（密码必填） |
-| `SSMANAGER_ADDRESS` | 宿主机 ssmanager 地址，默认 `host.docker.internal:6100` |
-| `SSMANAGER_PUBLIC_HOST` | 客户端连接使用的公网域名/IP |
-| `SSMANAGER_PUBLIC_BASE_URL` | 订阅基础 URL，如 `https://panel.example.com` |
-| `WEB_PORT` | 宿主机映射端口，默认 `3000` |
-
 其他场景：
 
-- **使用配置文件**：`cp api/config.example.json config.json` 并修改，然后取消
-  `compose.yaml` 中 `./config.json:/app/config.json:ro` 的注释。挂载配置文件后，
-  环境变量仍然优先。
-- **Unix socket**：取消 `compose.yaml` 中 `/run/ssmanager.sock` 挂载的注释，并在 `.env`
-  设置 `SSMANAGER_ADDRESS=unix:/run/ssmanager.sock`。
+- **Unix socket**：取消 `compose.yaml` 中 `/run/ssmanager.sock` 挂载的注释，并在
+  `config.json` 设置 `"ssmanagerAddress": "unix:/run/ssmanager.sock"`。
 - **Linux 共享网络**：取消 `network_mode: host` 注释并移除 `ports`，即可直接访问
   `127.0.0.1:6100` 上的 ssmanager。
 - **数据持久化**：默认使用命名卷 `ssmanager-data`；可用
@@ -129,4 +144,5 @@ docker compose up -d --build
 
 ## 配置
 
-完整配置项、环境变量、`-c` 指定配置文件、单文件部署说明见 [api/README.md](api/README.md)。
+配置只来自 `-c` 指定的文件。完整键、默认值、Unix socket、单文件部署与平台要求见
+[api/README.md](api/README.md)，模板见 [api/config.example.json](api/config.example.json)。

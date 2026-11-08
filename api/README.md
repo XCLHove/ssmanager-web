@@ -127,7 +127,7 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
   普通用户密码使用 scrypt 校验（`scrypt$N$r$p$salt$hash`）。禁用账号返回 `code: 403`、
   `message: "账号已被禁用"`。
 - 会话只保存在内存：`token`、`requestKey`、`responseKey`、username、role、userId、过期时间
-  （`SSMANAGER_WEB_TOKEN_TTL`）；不保存会话 RSA 密钥对。
+  （配置文件 `jwtExpiresIn`）；不保存会话 RSA 密钥对。
 - **按账号单点登录**：同一账号新登录会立即使旧 token 失效；进程重启后所有会话失效。
 - 登录失败限流：同一「用户名 + 来源 IP」10 分钟内失败 5 次后封禁 5 分钟，返回 `code: 429`。
 - `POST /api/auth/logout`（需鉴权+加密）销毁当前 token。
@@ -220,22 +220,10 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
 错误响应（400/401/404/429/500/502）始终为明文 `{code, message, data:null}`
 （401 时没有有效会话，无法加密）。
 
-## 配置与环境变量
+## 配置文件
 
-### 优先级
-
-**环境变量 > `config.json` > 内置默认值**
-
-- 环境变量为空字符串时视为“未设置”，会继续读取 `config.json`。
-- 支持 `.env` 文件（与 `package.json` 同目录，参考 `.env.example`），由 `dotenv` 加载。
-- 配置在进程启动时读取，修改后需重启服务。
-
-### 配置文件 `config.json`
-
-仓库提供 `config.example.json` 作为示例，复制为 `config.json` 后按需修改
-（`config.json` 已加入 `.gitignore`，避免把凭据提交入库）。
-
-默认路径为 `<api 根>/config.json`（与 `package.json` 同目录）。可通过命令行指定其他文件：
+所有配置只从配置文件读取，**不读取环境变量或 `.env`**。启动时必须通过
+`-c` / `--config` / `--config=` 指定配置文件：
 
 ```bash
 node dist/server.mjs -c /path/to/config.json
@@ -243,59 +231,44 @@ node dist/server.mjs --config /path/to/config.json
 node dist/server.mjs --config=/path/to/config.json
 ```
 
+- 未指定 `-c`、参数缺值、文件不存在/不可读、JSON 解析失败或内容非 JSON 对象时，
+  打印含路径与原因的错误，并以退出码 1 退出。
 - 相对路径基于**当前工作目录**解析。
-- 显式指定的文件不存在、不可读或 JSON 解析失败时，打印含路径与原因的错误并以退出码 1 退出（不回退默认值）。
-- 不传参数时仍读取默认 `config.json`；默认文件不存在时忽略并使用内置默认值。
-- `.env` 始终由 dotenv 从当前工作目录加载，不随 `-c` 改变；环境变量优先级仍高于配置文件。
+- 配置在进程启动时读取，修改后需重启服务。
+- 仓库提供 `config.example.json` 作为唯一模板，复制为 `config.json` 后修改
+  （`config.json` 已加入 `.gitignore`，避免把凭据提交入库）。
 
-完整示例：
+### 配置键与默认值
 
-```jsonc
+| 键 | 默认值 | 说明 |
+| --- | --- | --- |
+| `username` | `admin` | 超级管理员用户名（注册用户不得与其同名） |
+| `password` | `admin123` | 超级管理员密码（明文存储；前端提交其 MD5） |
+| `ssmanagerAddress` | `127.0.0.1:6100` | ssmanager 地址，支持 UDP `host:port` 与 Unix datagram socket |
+| `webHost` | `0.0.0.0` | Web 服务监听地址 |
+| `webPort` | `3000` | Web 服务监听端口（1-65535） |
+| `jwtExpiresIn` | `12h` | 登录会话有效期，支持 `ms/s/m/h/d` |
+| `dataDir` | `data` | SQLite 数据目录；相对路径基于 `PACKAGE_ROOT`，支持绝对路径；DB 文件固定为 `<dataDir>/ssmanager-web.db` |
+| `publicHost` | `127.0.0.1` | 客户端连接使用的公网主机/域名（端口沿用服务器端口） |
+| `publicBaseUrl` | 空 | 订阅绝对 URL 的基础地址（如 `https://ss.example.com`）；为空时使用请求的 Host |
+| `managerTimeoutMs` | `3000` | 与 ssmanager 通信超时（毫秒） |
+
+完整示例（`config.example.json`）：
+
+```json
 {
-  // 超级管理员（配置文件用户，不入库）
   "username": "admin",
   "password": "admin123",
-
-  // ssmanager 地址：UDP host:port 或 Unix datagram socket
   "ssmanagerAddress": "127.0.0.1:6100",
-
-  // Web 服务监听
   "webHost": "0.0.0.0",
   "webPort": 3000,
-
-  // 登录会话有效期（ms/s/m/h/d）
   "jwtExpiresIn": "12h",
-
-  // 本地 SQLite 数据目录（相对路径基于 api 目录）
   "dataDir": "data",
-
-  // 客户端连接使用的主机（订阅/节点地址，端口沿用服务器端口）
   "publicHost": "127.0.0.1",
-
-  // 订阅绝对 URL 的基础地址；留空则使用请求的 Host
   "publicBaseUrl": "",
-
-  // 与 ssmanager 通信超时（毫秒）
   "managerTimeoutMs": 3000
 }
 ```
-
-### 环境变量一览
-
-| 环境变量 | config.json 键 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `SSMANAGER_WEB_USERNAME` | `username` | `admin` | 超级管理员用户名（注册用户不得与其同名） |
-| `SSMANAGER_WEB_PASSWORD` | `password` | `admin123` | 超级管理员密码（明文存储；前端提交其 MD5） |
-| `SSMANAGER_ADDRESS` | `ssmanagerAddress` | `127.0.0.1:6100` | ssmanager 地址，支持 UDP `host:port` 与 Unix datagram socket |
-| `SSMANAGER_WEB_HOST` | `webHost` | `0.0.0.0` | Web 服务监听地址 |
-| `SSMANAGER_WEB_PORT` | `webPort` | `3000` | Web 服务监听端口（1-65535） |
-| `SSMANAGER_WEB_TOKEN_TTL` | `jwtExpiresIn` | `12h` | 登录会话有效期，支持 `ms/s/m/h/d` |
-| `SSMANAGER_DATA_DIR` | `dataDir` | `data` | SQLite 数据目录；相对路径基于根目录，支持绝对路径；DB 文件固定为 `<dataDir>/ssmanager-web.db` |
-| `SSMANAGER_ROOT` | - | `src/..` 或 `dist/..` | 配置与数据根目录；单文件部署自定义布局时使用 |
-| `SSMANAGER_UI_DIR` | - | `<root>/../ui/dist` | 前端静态资源目录 |
-| `SSMANAGER_PUBLIC_HOST` | `publicHost` | `127.0.0.1` | 客户端连接使用的公网主机/域名（端口沿用服务器端口） |
-| `SSMANAGER_PUBLIC_BASE_URL` | `publicBaseUrl` | 空 | 订阅绝对 URL 的基础地址（如 `https://ss.example.com`）；为空时使用请求的 Host |
-| `SSMANAGER_TIMEOUT_MS` | `managerTimeoutMs` | `3000` | 与 ssmanager 通信超时（毫秒） |
 
 ### `ssmanagerAddress` 解析规则
 
@@ -304,25 +277,16 @@ node dist/server.mjs --config=/path/to/config.json
   - 未写端口的 host 仅接受 IP、`localhost` 或含点域名，否则回退默认地址并告警。
 - **Unix datagram socket**：`unix:/run/ssmanager.sock`、`unix:///run/ssmanager.sock`，
   或以 `/`、`./`、`../` 开头的裸路径；空路径回退默认 UDP 地址并告警。
-- 旧 `SSMANAGER_PORT` 环境变量与 `config.json` 的 `ssmanagerPort` 键已移除，存在时忽略（不报错）。
+- 旧 `config.json` 的 `ssmanagerPort` 键已移除，存在时忽略（不报错）。
 
-### 常用配置示例
+### 常用配置修改
 
-以下命令假定已执行 `pnpm build`（或改用 `pnpm dev`）：
+直接编辑 `config.json`：
 
-```bash
-# 局域网/公网部署
-SSMANAGER_PUBLIC_HOST=ss.example.com \
-SSMANAGER_PUBLIC_BASE_URL=https://ss.example.com \
-SSMANAGER_WEB_PORT=3000 \
-pnpm start
-
-# 自定义数据目录（绝对路径）
-SSMANAGER_DATA_DIR=D:/ssmanager-data pnpm start
-
-# Unix socket 连接的 ssmanager
-SSMANAGER_ADDRESS=unix:/run/ssmanager.sock pnpm start
-```
+- 局域网/公网部署：`"publicHost": "ss.example.com"`、`"publicBaseUrl": "https://ss.example.com"`；
+- 修改监听端口：`"webPort": 3000`；
+- 自定义数据目录：`"dataDir": "D:/ssmanager-data"`（绝对路径）或相对 `PACKAGE_ROOT` 的路径；
+- Unix socket 连接的 ssmanager：`"ssmanagerAddress": "unix:/run/ssmanager.sock"`。
 
 ### Unix socket 模式说明
 
@@ -342,25 +306,21 @@ SSMANAGER_ADDRESS=unix:/run/ssmanager.sock pnpm start
 
 ```bash
 pnpm install
-pnpm dev        # tsx watch src/index.ts（文件变更自动重启）
-pnpm typecheck  # tsc --noEmit
-pnpm build      # 先 typecheck，再由 esbuild 打包 dist/server.mjs（不含 sourcemap）
-pnpm start      # node --disable-warning=ExperimentalWarning dist/server.mjs
-
-# 指定配置文件（pnpm 传参需要 `--`）
-pnpm start -- -c /path/to/config.json
-pnpm dev -- --config=/path/to/config.json
+pnpm dev -- -c config.json        # tsx watch src/index.ts（文件变更自动重启）
+pnpm typecheck                    # tsc --noEmit
+pnpm build                        # 先 typecheck，再由 esbuild 打包 dist/server.mjs
+pnpm start -- -c config.json      # 运行打包产物
 ```
 
-- esbuild 会把 express/cors/dotenv/yaml 等全部内联；`unix-dgram` 保持 external。
+- npm scripts 不内置 `-c`，必须显式传入（pnpm 传参需要 `--`）。
+- esbuild 会把 express/cors/yaml 等全部内联；`unix-dgram` 保持 external。
 - 构建后会清理并重新生成 `dist/node_modules/`，递归复制 `unix-dgram` 及其运行期依赖
   （如 `bindings`、`nan`、`file-uri-to-path`），供 `dist/server.mjs` 通过
   `createRequire(import.meta.url)` 直接加载。
 - 若复制出的 `unix-dgram` 中没有 `.node`（例如 Windows 上 pnpm 阻止了构建脚本），
   构建仅打印警告、不失败；UDP 模式仍可正常使用。
-- `.env` 由 `dotenv` 从**当前工作目录**加载。
-- 若存在默认 UI 目录（`<root>/../ui/dist`，可用 `SSMANAGER_UI_DIR` 覆盖），服务会自动托管
-  静态文件，非 `/api`、非 `/sub` 的 GET 请求 fallback 到 `index.html`。
+- 前端静态目录固定为 `<PACKAGE_ROOT>/../ui/dist`；存在时自动托管，
+  非 `/api`、非 `/sub` 的 GET 请求 fallback 到 `index.html`。不再支持环境变量覆盖。
 
 ## 单文件部署（生产免安装依赖）
 
@@ -368,45 +328,44 @@ pnpm dev -- --config=/path/to/config.json
 `dist/node_modules/unix-dgram` 及其运行期依赖。目标机只需要 Node.js >= 22，
 **不需要 `pnpm install`**；UDP 部署不依赖任何原生模块。
 
-推荐目录布局（`server.mjs` 必须在 `dist/` 子目录下，这样默认根目录才是它的上一级）：
+推荐目录布局（前端目录固定为 `<PACKAGE_ROOT>/../ui/dist`，因此 `ui/` 与
+`ssmanager-web/` 平级）：
 
 ```text
-/opt/ssmanager-web/
-├── config.json          # 从 config.example.json 复制并修改
-├── .env                 # 可选，从当前工作目录加载
-├── data/                # 首次启动自动创建（SQLite）
-└── dist/
-    ├── server.mjs
-    └── node_modules/    # 构建时自动复制
-        ├── unix-dgram/
-        ├── bindings/
-        ├── nan/
-        └── file-uri-to-path/
+/opt/deploy/
+├── ui/
+│   └── dist/
+└── ssmanager-web/
+    ├── config.json          # 从 config.example.json 复制并修改
+    ├── data/                # 首次启动自动创建（SQLite）
+    └── dist/
+        ├── server.mjs
+        └── node_modules/    # 构建时自动复制
+            ├── unix-dgram/
+            ├── bindings/
+            ├── nan/
+            └── file-uri-to-path/
 ```
 
 ```bash
 # 在 api 目录构建
 pnpm build
 
-# 复制整个 dist（包含 unix-dgram 及其依赖）
-cp -r dist /opt/ssmanager-web/
+# 复制 dist 与配置模板
+cp -r dist /opt/deploy/ssmanager-web/dist
+cp config.example.json /opt/deploy/ssmanager-web/config.json
 
-# 目标机启动（默认读取 ./config.json）
-cd /opt/ssmanager-web
-node --disable-warning=ExperimentalWarning dist/server.mjs
-
-# 或指定配置文件
-node --disable-warning=ExperimentalWarning dist/server.mjs -c /etc/ssmanager-web/config.json
-node --disable-warning=ExperimentalWarning dist/server.mjs --config=/etc/ssmanager-web/config.json
+# 目标机启动（必须 -c；只使用 API 时可省略 ui/ 目录）
+cd /opt/deploy/ssmanager-web
+node --disable-warning=ExperimentalWarning dist/server.mjs -c config.json
 ```
 
 路径与可选依赖说明：
 
-- 配置/数据根目录：默认为 `dist/server.mjs` 的上一级（上面的 `/opt/ssmanager-web`）；
-  可用 `SSMANAGER_ROOT` 覆盖（例如 `server.mjs` 不在 `dist/` 下时）。
-- 前端静态目录：默认 `<root>/../ui/dist`，可用 `SSMANAGER_UI_DIR` 指向任意 `ui/dist`。
-- `.env` 始终从当前工作目录加载，与 `SSMANAGER_ROOT` 无关。
-- 默认 UI 目录见上；独立部署通常需要设置 `SSMANAGER_UI_DIR` 或只使用 API。
+- `PACKAGE_ROOT` 固定为 `dist/server.mjs` 的上一级（上面的 `/opt/deploy/ssmanager-web`）；
+  `dataDir` 相对路径基于它解析。
+- 前端静态目录固定为 `<PACKAGE_ROOT>/../ui/dist`，不支持环境变量覆盖；不提供前端时仅运行 API。
+- 启动必须 `-c`；所有配置只来自该文件，不读取环境变量或 `.env`。
 - `dist/node_modules/unix-dgram` 的原生二进制与**构建机 OS/架构/Node ABI**绑定：
   - UDP 部署可完全忽略该目录；
   - Unix socket 部署必须在目标平台完成 `pnpm approve-builds` + `pnpm rebuild unix-dgram`
@@ -465,7 +424,7 @@ api/
 ├── src/                   # TypeScript 源码（.ts）
 │   ├── index.ts           # 入口：启动 HTTP 服务
 │   ├── app.ts             # Express 应用装配（中间件/路由/静态托管/错误处理）
-│   ├── config.ts          # 配置加载（env > config.json > 默认值；根目录/UI 目录覆盖）
+│   ├── config.ts          # 配置加载（必须 -c 指定文件；缺失键使用内置默认值）
 │   ├── db.ts              # SQLite 统一连接 / 建表与加列迁移 / 外键
 │   ├── response.ts        # 统一响应信封 ok/okEncrypted/fail
 │   ├── requestCrypto.ts   # 登录 RSA-OAEP 解密 + 请求 AES-GCM 解密
@@ -501,7 +460,6 @@ api/
 ├── dist/server.mjs        # 构建产物（单文件部署）
 ├── data/                  # 默认数据目录（运行时生成 SQLite，已 gitignore）
 ├── tsconfig.json
-├── config.example.json    # 配置示例（复制为 config.json 后修改；config.json 已 gitignore）
-├── .env.example           # 环境变量示例
+├── config.example.json    # 唯一配置模板（复制为 config.json 后修改；config.json 已 gitignore）
 └── package.json
 ```

@@ -6,25 +6,17 @@ services:
     container_name: ssmanager-web
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-3000}:3000"
-    environment:
-      SSMANAGER_WEB_USERNAME: ${SSMANAGER_WEB_USERNAME:-admin}
-      SSMANAGER_WEB_PASSWORD: ${SSMANAGER_WEB_PASSWORD:?请在 .env 中设置 SSMANAGER_WEB_PASSWORD}
-      # ssmanager 在宿主机时使用 host.docker.internal；也可填局域网/公网地址
-      SSMANAGER_ADDRESS: ${SSMANAGER_ADDRESS:-host.docker.internal:6100}
-      # 客户端连接使用的公网主机与订阅基础 URL
-      SSMANAGER_PUBLIC_HOST: ${SSMANAGER_PUBLIC_HOST:-127.0.0.1}
-      SSMANAGER_PUBLIC_BASE_URL: ${SSMANAGER_PUBLIC_BASE_URL:-}
-      # SSMANAGER_DATA_DIR: /app/data
+      - "3000:3000"
     extra_hosts:
       # Linux 下让容器能解析宿主机；Docker Desktop 已内置
       - "host.docker.internal:host-gateway"
     volumes:
+      # 配置文件（启动前先：cp api/config.example.json config.json 并修改）
+      - ./config.json:/app/config.json:ro
       # SQLite 数据（默认 /app/data）
       - ssmanager-data:/app/data
-      # 使用配置文件时取消注释，并先执行：cp api/config.example.json config.json
-      # - ./config.json:/app/config.json:ro
-      # Unix socket 模式时取消注释，并设置 SSMANAGER_ADDRESS=unix:/run/ssmanager.sock
+      # Unix socket 模式时取消注释，并在 config.json 中设置
+      # "ssmanagerAddress": "unix:/run/ssmanager.sock"
       # - /run/ssmanager.sock:/run/ssmanager.sock
     # 与宿主机共享网络（Linux 可直接访问 127.0.0.1:6100）；启用后请移除 ports
     # network_mode: host
