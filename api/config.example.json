@@ -2,7 +2,7 @@
   "username": "admin",
   "password": "admin123",
   "ssmanagerAddress": "127.0.0.1:6100",
-  "webHost": "0.0.0.0",
+  "webHost": "127.0.0.1",
   "webPort": 3000,
   "jwtExpiresIn": "12h",
   "dataDir": "data",

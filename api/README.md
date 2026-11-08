@@ -124,8 +124,13 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
 ```
 
 - 配置中的管理员优先校验（`role: "admin"`、`userId: null`）；否则查 `users` 表，
-  普通用户密码使用 scrypt 校验（`scrypt$N$r$p$salt$hash`）。禁用账号返回 `code: 403`、
-  `message: "账号已被禁用"`。
+  普通用户密码使用 scrypt 校验（`scrypt$N$r$p$salt$hash`）。
+- 登录错误语义：
+  - 用户名或密码为空 → `code: 400`、`message: "请输入用户名和密码"`；
+  - 账号不存在（配置管理员与 `users` 表均无）→ `code: 401`、`message: "用户不存在"`；
+  - 账号存在但密码错误 → `code: 401`、`message: "密码错误"`；
+  - DB 用户密码正确但已禁用 → `code: 403`、`message: "账号已被禁用"`；
+  - 失败仍按「用户名 + 来源 IP」计入限流，超限 `429`。密码比较保持恒定时间。
 - 会话只保存在内存：`token`、`requestKey`、`responseKey`、username、role、userId、过期时间
   （配置文件 `jwtExpiresIn`）；不保存会话 RSA 密钥对。
 - **按账号单点登录**：同一账号新登录会立即使旧 token 失效；进程重启后所有会话失效。
@@ -165,9 +170,57 @@ ssmanager-web 的 Express 后端。通过 UDP 文本协议与本机的 shadowsoc
   （查不到或手工用户不输出该字段）；`name`/`password` 字段保持不变。
 - 托管 users **只来自数据库**；`/api/servers/add|update` 会忽略请求中的手工 `users`。
   已有用户密码时禁止改端口、禁止改成非 2022-blake3-* 方法。
-- 订阅 URL：`<publicBaseUrl 或请求 origin>/sub/<token>`，公开 GET，返回 ClashMeta YAML。
+- 订阅 URL：`<publicBaseUrl 或请求 origin>/sub/<token>`，公开 GET。新密码默认返回
+  **age 加密的 ClashMeta YAML**；`?plain=1` 返回明文兼容内容。
 - `/api/user/*` 仅供普通用户（配置管理员 userId=null 返回 `403`）。
 - `templateReady` 表示管理员是否为该服务器保存过自定义模板；未保存时订阅使用内置默认模板。
+
+### age 加密订阅
+
+- 生成用户密码时同时生成 age X25519 密钥对，随密码行保存到
+  `user_server_passwords.age_private_key` / `age_public_key`。
+- 默认 `GET /sub/<token>`：若有 `age_public_key`，用该公钥加密渲染后的 YAML，
+  输出 ASCII armor：
+  - `Content-Type: text/plain; charset=utf-8`
+  - 文件名 `ssmanager-<port>.yaml.age`
+  - 保留 `Cache-Control: no-store`、`profile-update-interval: 24`、
+    `X-Content-Type-Options: nosniff`
+- `GET /sub/<token>?plain=1`（或 `?plain=true`）：始终返回明文 YAML
+  （`text/yaml`），用于不支持 age 的客户端。
+- 旧密码没有 age 密钥时默认继续返回明文；不会自动补密钥。
+- 加密失败返回 `500` `text/plain`「订阅加密失败」，记录日志且绝不回退明文。
+- 前端/客户端使用加密订阅时，需要把生成的 `agePrivateKey` 填入支持 age 的客户端；
+  不支持 age 时使用返回的 `plainUrl`。
+- `/api/user/servers/list` 的每个密码项会返回 `agePrivateKey`、`agePublicKey`、
+  `plainUrl`；旧密码对应字段为 `null`。
+
+### 自助修改登录密码
+
+`POST /api/user/password/change {oldPassword, newPassword}`（均为明文密码的 MD5 小写 hex）：
+
+- 配置管理员（`userId=null`）→ `400`「配置文件管理员的密码请在配置文件中修改」；
+- 新密码为空 → `400`「新密码不能为空」；
+- 旧密码校验失败 → `400`「当前密码错误」（scrypt 恒定时间比较）；
+- 新旧密码相同 → `400`「新密码不能与当前密码相同」；
+- 成功：重新 scrypt 哈希并更新 `updated_at`，使该用户所有会话立即失效，返回 `{ok:true}`；
+  需要用新密码重新登录。
+
+### 删除用户（管理员）
+
+`POST /api/admin/users/remove {userId}`：
+
+1. 收集该用户授权与密码涉及的端口；
+2. 显式删除其 `user_server_passwords` 与 `user_server_grants`；
+3. 对每个端口 `applyFromDb` 重建 ssmanager users（清除该用户的 `ssm_u*` 条目）；
+4. 全部成功后删除 `users` 行、踢下线并返回 `{ok:true, affectedPorts}`。
+
+后果：该用户的授权、密码、全部订阅 URL 立即失效（404），旧 token 立即 401；
+`registration_codes.used_by_user_id` 通过 `ON DELETE SET NULL` 保留已使用注册码
+（`usedByUsername` 为空，前端可显示“已删除用户”）。
+
+若任一端口重建失败：接口返回 `502`「删除失败，端口 X 重建失败，请重试」，
+**不删除 users 行**；此时授权/密码已删除，用户无法再生成/使用，可用
+`/api/admin/servers/reapply` 或后续恢复流程继续清理管理器中的残留用户。
 
 ## 配置模板
 
@@ -373,6 +426,47 @@ node --disable-warning=ExperimentalWarning dist/server.mjs -c config.json
   - 未包含二进制时启动仍正常，仅 Unix 模式请求会返回明确的加载/平台错误。
 - 由于包含原生模块，`dist` 体积会随平台增大；不同平台/ABI 的产物不要混用。
 
+## 持久化与恢复
+
+ssmanager 不持久化动态 `add` 的服务器，重启即清空。本后端以 SQLite 为唯一事实来源，
+进行双向对账：
+
+- 进程启动时立即执行一次对账，之后每 30 秒执行一次（`setInterval(...).unref()`，
+  shutdown 时清理）。
+- 读取 `server_configs` 的本地端口集合与 ssmanager 运行端口：
+  - `missing = local - running` → 逐个 `applyFromDb` 重建（主 PSK + 数据库用户密码/users）；
+  - `extra = running - local` → 逐个 `managerClient.removeServer` 移除。
+  - 顺序为先补缺失、再移除未登记端口。
+- `extra` 移除与 users 重建共用全局串行队列；移除前会再次检查本地记录，若期间已新增
+  则跳过，避免并发误删。
+- 本地记录为空而管理器有端口时，会先打印明确警告
+  「本地无服务器记录，将移除 ssmanager 中全部 N 个端口」，再执行移除。
+- 管理器不可达（未启动/Docker 启动顺序）时直接返回，不增删任何端口；Web 正常启动，
+  后续周期自动重试。日志只在恢复/移除成功、失败（同一端口仅首次）以及管理器可达性
+  变化时输出，避免每 30 秒刷屏。
+- 不修改本地 DB（移除多余端口只操作 ssmanager）；`/servers/list` 不再自动 prune。
+  `pruneServerConfigs` 仅保留为手动工具，不再自动调用。
+
+注意：不要绕过面板操作 ssmanager——手工 `remove` 会被补回，手工 `add` 会被移除；
+请通过面板 API 增删服务器。**若 `dataDir` 配置错误或数据卷未挂载导致本地记录为空，
+下一次对账会移除 ssmanager 中的所有端口**，请务必确认数据目录正确。若本地记录已被
+旧版本 prune 删除，则无法自动恢复，需要重新创建。
+
+## 流量历史（管理员）
+
+- ssmanager 的 `ping` 只提供每端口**累计总字节**，无方向（上传/下载）拆分；本接口返回
+  **合计速率**，单位 `bytes/s`。
+- 后台采样器每 1 秒调用一次 `ping`，每端口在内存中保留最近 300 个样本（约 5 分钟），
+  不写 SQLite；端口消失后样本保留 5 分钟再清理。上一次 ping 未完成时跳过本轮。
+- `POST /api/admin/stats/history` body `{port, seconds}`：
+  - `port` 1-65535；`seconds` 10-60 的整数；
+  - 返回窗口内的样本，首点速率使用窗口前最近一个样本作为基准；
+  - `rate = max(0, (total_i - total_{i-1}) / dt * 1000)`；
+  - 若 `total_i < total_{i-1}`（端口重建/计数器归零），该点 `rate=0`、`reset=true`，
+    后续以新值继续；
+  - 无样本时 `samples: []`、`latest: null`。
+- 现有 `/api/stats` 保持不变（累计总快照，所有登录用户可用）。
+
 ## API 列表
 
 除 `POST /api/auth/public-key`、`POST /api/auth/login`、`POST /api/auth/register` 外，
@@ -381,7 +475,7 @@ node --disable-warning=ExperimentalWarning dist/server.mjs -c config.json
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `POST` | `/api/auth/public-key` | 获取登录公钥（不鉴权、不加密）→ data `{publicKey, kid, expiresAt}` |
-| `POST` | `/api/auth/login` | 登录。body `{kid, data:{key,iv,data}}`，解密后为 `{username, password(MD5), sessionKey(Base64 32B)}` → data `{token, username, role, userId}`；kid 无效/协商失败 `400`；凭据错误 `401`；禁用 `403`；失败过多 `429` |
+| `POST` | `/api/auth/login` | 登录。body `{kid, data:{key,iv,data}}`，解密后为 `{username, password(MD5), sessionKey(Base64 32B)}` → data `{token, username, role, userId}`；空字段 `400`；用户不存在/密码错误 `401`；禁用 `403`；失败过多 `429` |
 | `POST` | `/api/auth/register` | 注册。body 同上，解密后为 `{username, password(MD5), code}` → data `{ok:true}`；参数/注册码错误 `400`；限流 `429` |
 | `POST` | `/api/auth/me` | 当前登录用户 → data `{userId, username, role}` |
 | `POST` | `/api/auth/logout` | 退出登录 → data `{ok:true}` |
@@ -391,16 +485,19 @@ node --disable-warning=ExperimentalWarning dist/server.mjs -c config.json
 | `POST` | `/api/admin/users/list` | 用户列表 `{keyword?,page?,pageSize?}` → data `{total, items}` |
 | `POST` | `/api/admin/users/set-enabled` | 启停用户 `{userId, enabled}`；禁用时踢会话 → data `{ok:true}` |
 | `POST` | `/api/admin/users/reset-password` | 重置密码 `{userId, password(MD5)}`；踢会话 → data `{ok:true}` |
+| `POST` | `/api/admin/users/remove` | 删除用户 `{userId}` → data `{ok:true, affectedPorts}`；授权/密码/订阅失效，已使用注册码保留 |
 | `POST` | `/api/admin/users/grants/get` | 查询授权端口 `{userId}` → data `{ports}` |
 | `POST` | `/api/admin/users/grants/set` | 设置授权端口 `{userId, ports}`（仅 2022-blake3-* 且有本地配置）；撤销时删密码行→重建→删授权 → data `{ok:true, affectedPorts}` |
 | `POST` | `/api/admin/servers/reapply` | 按数据库 users 重建端口 `{port}` → data `{ok:true}` |
 | `POST` | `/api/admin/templates/get` | 读取模板 `{port}` → data `{format, code, defaultCode, updatedAt}` |
 | `POST` | `/api/admin/templates/save` | 保存模板 `{port, format:'clash', code}`（编译+试运行校验）→ data `{ok:true}` |
 | `POST` | `/api/admin/templates/preview` | 预览模板 `{port, code}` → data `{yaml}` |
-| `POST` | `/api/user/servers/list` | 用户授权服务器与密码槽（`maxSlots=1`）→ data `{items:[{port,host,method,configKnown,templateReady,canGenerate,maxSlots,passwords}]}` |
-| `POST` | `/api/user/passwords/generate` | 生成用户密码 `{port}`（`slot=1`）→ data `{id,slot,password,clientPassword,url}`；已有密码时 `400`“每个服务器最多 1 个密码” |
+| `POST` | `/api/admin/stats/history` | 管理员流量历史 `{port, seconds:10-60}` → data `{port, window, unit:"bytes/s", samples:[{t,rate,total,reset}], latest}` |
+| `POST` | `/api/user/servers/list` | 用户授权服务器与密码槽（`maxSlots=1`）→ data `{items:[{port,host,method,configKnown,templateReady,canGenerate,maxSlots,passwords:[{id,slot,url,plainUrl,agePrivateKey,agePublicKey,createdAt}]}]}` |
+| `POST` | `/api/user/passwords/generate` | 生成用户密码 `{port}`（`slot=1`）→ data `{id,slot,password,clientPassword,url,plainUrl,agePrivateKey,agePublicKey}`；已有密码时 `400`“每个服务器最多 1 个密码” |
 | `POST` | `/api/user/passwords/remove` | 删除本人密码 `{id}` → data `{ok:true}` |
-| `GET` | `/sub/:token` | 公开订阅（非信封）：成功返回 `text/yaml`；无效/禁用/撤销 `404`，模板错误 `500` |
+| `POST` | `/api/user/password/change` | 自助修改登录密码 `{oldPassword, newPassword}(均为 MD5)` → data `{ok:true}`；成功后该用户所有会话失效；配置管理员返回 `400` |
+| `GET` | `/sub/:token` | 公开订阅（非信封）：有 age 密钥时返回 age armored `text/plain`，否则 `text/yaml`；`?plain=1` 强制明文；无效/禁用/撤销 `404`，模板/加密错误 `500` |
 | `POST` | `/api/servers/list` | 服务器列表 → data `{ports: [8388, ...], servers: [{port, password, ..., configKnown}]}`（按端口升序，未设置的字段省略） |
 | `POST` | `/api/servers/add` | 添加端口。body `{port, password, method?, noDelay?, plugin?, pluginOpts?, pluginMode?, mode?, users?}` → data `{ok: true}`；校验失败 `400`；manager 拒绝或启动失败 `502` |
 | `POST` | `/api/servers/update` | 编辑配置（remove 旧端口后 add 新配置）。body `{originalPort, ...新配置}`，`port` 为可选新端口 → data `{ok: true}`；校验失败 `400`；manager 错误 `502` |

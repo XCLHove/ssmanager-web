@@ -51,6 +51,23 @@ node --disable-warning=ExperimentalWarning dist/server.mjs -c config.json
 无需 `pnpm install`。只使用 API、不需要前端时，可只保留 `ssmanager-web/`。
 详细配置与 Unix socket 说明见 [api/README.md](api/README.md)。
 
+## 持久化与恢复
+
+ssmanager 对动态 `add` 的服务器**不做持久化**，ssmanager 重启后这些端口会消失。
+ssmanager-web 以本地 SQLite 为唯一事实来源，进行**双向对账**：
+
+- 启动时立即对账一次，之后每 30 秒对账一次；
+- 本地有记录、ssmanager 缺失的端口会自动 `add` 回来（包含该端口的用户密码）；
+- ssmanager 中存在、但本地 `server_configs` 没有记录的端口会被自动 `remove`；
+- ssmanager 未启动或暂时不可达时 Web 正常启动，不修改任何数据，后续周期自动重试。
+
+因此**不要绕过面板操作 ssmanager**：手工 `remove` 会被对账补回，手工 `add` 会被对账移除；
+增删服务器请通过面板 API/页面操作。
+
+**注意**：若数据目录配置错误/未挂载导致本地记录为空，下一次对账会把 ssmanager 中
+所有端口全部移除。请务必确认 `dataDir` 与数据卷挂载正确。
+若本地记录已被旧版本自动 prune 删除，则无法自动恢复，需要重新创建。
+
 ## 发布
 
 推送 `v*` 标签触发 [.github/workflows/release.yml](.github/workflows/release.yml)：
