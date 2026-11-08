@@ -71,34 +71,46 @@ router.post('/login', async (req, res) => {
   const usernameOk = typeof username === 'string' && username.length > 0;
   const passwordOk = typeof password === 'string' && password.length > 0;
 
-  // 缺字段也按同样的 401 文案返回，避免枚举账户
   if (!usernameOk || !passwordOk) {
-    return fail(res, 401, '用户名或密码错误');
+    return fail(res, 400, '请输入用户名和密码');
   }
 
   if (isLoginBlocked(username, req.ip)) {
     return fail(res, 429, '失败次数过多，请 5 分钟后再试');
   }
 
-  let account: Account | null = null;
+  const isAdminAccount = username === config.username;
+  const dbUser = isAdminAccount ? null : findUserByUsername(username);
 
-  if (verifyCredentials(username, password)) {
-    account = { userId: null, username: config.username, role: 'admin' };
-  } else {
-    const user = findUserByUsername(username);
-    if (user && verifyPassword(password, user.password_hash)) {
-      if (user.enabled !== 1) {
-        return fail(res, 403, '账号已被禁用');
-      }
-      touchLastLogin(user.id);
-      account = { userId: user.id, username: user.username, role: user.role || 'user' };
-    }
-  }
-
-  if (!account) {
+  // 用户不存在也要计入限流并按固定延迟返回，缩小与密码错误的时序差异
+  if (!isAdminAccount && !dbUser) {
     await loginFailureDelay();
     recordLoginFailure(username, req.ip);
-    return fail(res, 401, '用户名或密码错误');
+    return fail(res, 401, '用户不存在');
+  }
+
+  let account: Account;
+
+  if (isAdminAccount) {
+    if (!verifyCredentials(username, password)) {
+      await loginFailureDelay();
+      recordLoginFailure(username, req.ip);
+      return fail(res, 401, '密码错误');
+    }
+    account = { userId: null, username: config.username, role: 'admin' };
+  } else {
+    // 前面的存在性检查保证 dbUser 非空
+    const user = dbUser!;
+    if (!verifyPassword(password, user.password_hash)) {
+      await loginFailureDelay();
+      recordLoginFailure(username, req.ip);
+      return fail(res, 401, '密码错误');
+    }
+    if (user.enabled !== 1) {
+      return fail(res, 403, '账号已被禁用');
+    }
+    touchLastLogin(user.id);
+    account = { userId: user.id, username: user.username, role: user.role || 'user' };
   }
 
   // 登录成功：销毁一次性登录密钥对，并用协商的 sessionKey 派生会话密钥
