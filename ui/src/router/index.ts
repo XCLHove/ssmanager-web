@@ -48,6 +48,12 @@ const router = createRouter({
           meta: { title: '服务器管理', roles: ['admin'] },
         },
         {
+          path: 'templates',
+          name: 'templates',
+          component: () => import('@/views/admin/TemplatesView.vue'),
+          meta: { title: '模板管理', roles: ['admin'] },
+        },
+        {
           path: 'stats',
           name: 'stats',
           component: () => import('@/views/admin/TrafficView.vue'),

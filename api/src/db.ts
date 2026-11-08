@@ -109,6 +109,17 @@ try {
   // 旧库迁移：age 密钥列（不迁移旧数据）
   ensureColumn(database, 'user_server_passwords', 'age_private_key', 'age_private_key TEXT');
   ensureColumn(database, 'user_server_passwords', 'age_public_key', 'age_public_key TEXT');
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS template_library (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      format TEXT NOT NULL DEFAULT 'clash',
+      code TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
 } catch (err) {
   console.error(`[db] 初始化 SQLite 失败 (${DB_FILE}): ${err.message}`);
   throw err;
